@@ -25,8 +25,6 @@ impl ConstantPool {
         // first item is reserved
         let count = count - 1;
 
-        debug!("parsing {} constant pool items", count);
-
         let mut infos = Vec::with_capacity(count.into());
         infos.push(CpInfo::Reserved);
 
@@ -35,6 +33,8 @@ impl ConstantPool {
             trace!("{}: {cp_info:?}", i + 1);
             infos.push(cp_info);
         }
+
+        debug!("parsed {} constant pool items", count);
 
         Ok(Self { infos })
     }
@@ -97,88 +97,46 @@ impl CpInfo {
         let tag = u1(r)?;
 
         match tag {
-            UTF8_TAG => Self::utf8(r),
-            INTEGER_TAG => Self::integer(r),
-            CLASS_TAG => Self::class(r),
-            STRING_TAG => Self::string(r),
-            FIELD_REF_TAG => Self::field_ref(r),
-            METHOD_REF_TAG => Self::method_ref(r),
-            INTERFACE_METHOD_REF_TAG => Self::interface_method_ref(r),
-            NAME_AND_TYPE_TAG => Self::name_and_type(r),
-            METHOD_HANDLE_TAG => Self::method_handle(r),
-            METHOD_TYPE_TAG => Self::method_type(r),
-            INVOKE_DYNAMIC_TAG => Self::invoke_dynamic(r),
+            UTF8_TAG => {
+                let length = u2(r)?;
+                Ok(Self::Utf8(utf8(r, length.into())?))
+            }
+            INTEGER_TAG => Ok(Self::Integer(u4(r)?)),
+            CLASS_TAG => Ok(Self::Class {
+                name_index: u2(r)?.into(),
+            }),
+            STRING_TAG => Ok(Self::String {
+                string_index: u2(r)?.into(),
+            }),
+            FIELD_REF_TAG => Ok(Self::FieldRef {
+                class_index: u2(r)?.into(),
+                name_and_type_index: u2(r)?.into(),
+            }),
+            METHOD_REF_TAG => Ok(Self::MethodRef {
+                class_index: u2(r)?.into(),
+                name_and_type_index: u2(r)?.into(),
+            }),
+            INTERFACE_METHOD_REF_TAG => Ok(Self::InterfaceMethodRef {
+                class_index: u2(r)?.into(),
+                name_and_type_index: u2(r)?.into(),
+            }),
+            NAME_AND_TYPE_TAG => Ok(Self::NameAndType {
+                name_index: u2(r)?.into(),
+                descriptor_index: u2(r)?.into(),
+            }),
+            METHOD_HANDLE_TAG => Ok(Self::MethodHandle {
+                reference_kind: ReferenceKind::new(u1(r)?)?,
+                reference_index: u2(r)?.into(),
+            }),
+            METHOD_TYPE_TAG => Ok(Self::MethodType {
+                descriptor_index: u2(r)?.into(),
+            }),
+            INVOKE_DYNAMIC_TAG => Ok(Self::InvokeDynamic {
+                bootstrap_method_attr_index: u2(r)?.into(),
+                name_and_type_index: u2(r)?.into(),
+            }),
             _ => bail!("invalid constant pool info tag {tag}"),
         }
-    }
-
-    fn utf8(r: &mut impl Read) -> Result<Self> {
-        let length = u2(r)?;
-        Ok(Self::Utf8(utf8(r, length.into())?))
-    }
-
-    fn integer(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::Integer(u4(r)?))
-    }
-
-    fn class(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::Class {
-            name_index: u2(r)?.into(),
-        })
-    }
-
-    fn string(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::String {
-            string_index: u2(r)?.into(),
-        })
-    }
-
-    fn field_ref(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::FieldRef {
-            class_index: u2(r)?.into(),
-            name_and_type_index: u2(r)?.into(),
-        })
-    }
-
-    fn method_ref(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::MethodRef {
-            class_index: u2(r)?.into(),
-            name_and_type_index: u2(r)?.into(),
-        })
-    }
-
-    fn interface_method_ref(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::InterfaceMethodRef {
-            class_index: u2(r)?.into(),
-            name_and_type_index: u2(r)?.into(),
-        })
-    }
-
-    fn name_and_type(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::NameAndType {
-            name_index: u2(r)?.into(),
-            descriptor_index: u2(r)?.into(),
-        })
-    }
-
-    fn method_handle(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::MethodHandle {
-            reference_kind: ReferenceKind::new(u1(r)?)?,
-            reference_index: u2(r)?.into(),
-        })
-    }
-
-    fn method_type(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::MethodType {
-            descriptor_index: u2(r)?.into(),
-        })
-    }
-
-    fn invoke_dynamic(r: &mut impl Read) -> Result<Self> {
-        Ok(Self::InvokeDynamic {
-            bootstrap_method_attr_index: u2(r)?.into(),
-            name_and_type_index: u2(r)?.into(),
-        })
     }
 }
 
