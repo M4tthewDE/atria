@@ -7,12 +7,15 @@ use crate::{
     class::{
         access_flags::AccessFlag,
         constant_pool::{ConstantPool, CpIndex},
+        field::Field,
     },
     util::{u2, u4},
 };
 
 mod access_flags;
+mod attribute;
 mod constant_pool;
+mod field;
 
 /// Representation of a class, interface or module
 pub struct ClassFile {
@@ -22,6 +25,7 @@ pub struct ClassFile {
     pub access_flags: HashSet<AccessFlag>,
     pub this_class: CpIndex,
     pub super_class: CpIndex,
+    pub fields: Vec<Field>,
 }
 
 impl ClassFile {
@@ -57,6 +61,9 @@ impl ClassFile {
             bail!("todo: parse interfaces");
         }
 
+        let fields_count = u2(r)?;
+        let fields = Field::fields(r, fields_count.into())?;
+
         Ok(Self {
             minor_version,
             major_version,
@@ -64,6 +71,7 @@ impl ClassFile {
             access_flags,
             this_class,
             super_class,
+            fields,
         })
     }
 }
