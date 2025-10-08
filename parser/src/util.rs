@@ -1,0 +1,27 @@
+use std::io::Read;
+
+use anyhow::Result;
+
+pub fn u1(r: &mut impl Read) -> Result<u8> {
+    let mut buf = [0; 1];
+    r.read_exact(&mut buf)?;
+    Ok(buf[0])
+}
+
+pub fn u2(r: &mut impl Read) -> Result<u16> {
+    let mut buf = [0; 2];
+    r.read_exact(&mut buf)?;
+    Ok(u16::from_be_bytes(buf))
+}
+
+pub fn u4(r: &mut impl Read) -> Result<u32> {
+    let mut buf = [0; 4];
+    r.read_exact(&mut buf)?;
+    Ok(u32::from_be_bytes(buf))
+}
+
+pub fn utf8(r: &mut impl Read, length: usize) -> Result<String> {
+    let mut buf = vec![0; length];
+    r.read_exact(&mut buf)?;
+    Ok(String::from_utf8(buf)?)
+}

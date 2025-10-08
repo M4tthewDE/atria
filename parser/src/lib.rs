@@ -1,20 +1,31 @@
-use std::{fmt::Display, fs::File, io::Read, path::PathBuf};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{Cursor, Read},
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result, bail};
 use tracing::debug;
 use zip::{ZipArchive, result::ZipError};
+
+use crate::class::ClassFile;
+
+pub mod class;
+mod util;
 
 /// Finds and parses class files.
 #[derive(Default)]
 pub struct Parser {}
 
 impl Parser {
-    pub fn parse(&self, identifier: &ClassIdentifier) -> Result<()> {
+    pub fn parse(&self, identifier: &ClassIdentifier) -> Result<ClassFile> {
         debug!("parsing {identifier}");
 
         let bytes = Self::load_bytes(identifier)?;
         debug!("loaded {} bytes", bytes.len());
-        Ok(())
+
+        ClassFile::new(&mut Cursor::new(bytes))
     }
 
     fn load_bytes(identifier: &ClassIdentifier) -> Result<Vec<u8>> {
@@ -34,9 +45,7 @@ impl Parser {
         debug!("loading jmods from {jmods_path:?}");
 
         for jmod_dir_entry in jmods_path.read_dir()? {
-            let jmod_path = jmod_dir_entry?.path();
-
-            let mut archive = ZipArchive::new(File::open(&jmod_path)?)?;
+            let mut archive = ZipArchive::new(File::open(jmod_dir_entry?.path())?)?;
 
             let path_in_archive = format!(
                 "classes/{}",
@@ -108,6 +117,6 @@ mod tests {
         let parser = Parser::default();
         let class_identifier = ClassIdentifier::new("java.lang".to_owned(), "System".to_owned());
 
-        parser.parse(&class_identifier).unwrap();
+        let _class = parser.parse(&class_identifier).unwrap();
     }
 }
