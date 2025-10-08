@@ -4,7 +4,10 @@ use anyhow::{Result, bail};
 use tracing::debug;
 
 use crate::{
-    class::{access_flags::AccessFlag, constant_pool::ConstantPool},
+    class::{
+        access_flags::AccessFlag,
+        constant_pool::{ConstantPool, CpIndex},
+    },
     util::{u2, u4},
 };
 
@@ -17,6 +20,8 @@ pub struct ClassFile {
     pub major_version: u16,
     pub constant_pool: ConstantPool,
     pub access_flags: HashSet<AccessFlag>,
+    pub this_class: CpIndex,
+    pub super_class: CpIndex,
 }
 
 impl ClassFile {
@@ -44,11 +49,21 @@ impl ClassFile {
         let access_flags = AccessFlag::flags(r)?;
         debug!("access flags: {access_flags:?}");
 
+        let this_class = u2(r)?.into();
+        let super_class = u2(r)?.into();
+
+        let interfaces_count = u2(r)?;
+        if interfaces_count != 0 {
+            bail!("todo: parse interfaces");
+        }
+
         Ok(Self {
             minor_version,
             major_version,
             constant_pool,
             access_flags,
+            this_class,
+            super_class,
         })
     }
 }

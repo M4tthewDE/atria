@@ -5,6 +5,7 @@ use tracing::{debug, trace};
 
 use crate::util::{u1, u2, u4, utf8};
 
+/// A valid index into the constant pool.
 #[derive(Debug)]
 pub struct CpIndex(pub u16);
 

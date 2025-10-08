@@ -1,6 +1,6 @@
 use std::{collections::HashSet, io::Read};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use crate::util::u2;
 
