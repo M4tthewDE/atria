@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use tracing::{debug, trace};
 
 use crate::util::{u1, u2, u4, utf8};
@@ -38,6 +38,18 @@ impl ConstantPool {
         debug!("parsed {} constant pool items", count);
 
         Ok(Self { infos })
+    }
+
+    pub fn utf8(&self, index: &CpIndex) -> Result<&str> {
+        if let CpInfo::Utf8(content) = self
+            .infos
+            .get(index.0 as usize)
+            .context("constant pool item at index {index} not found")?
+        {
+            Ok(content)
+        } else {
+            bail!("no utf8 constant pool item found at index {index:?}")
+        }
     }
 }
 

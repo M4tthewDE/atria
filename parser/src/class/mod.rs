@@ -62,7 +62,7 @@ impl ClassFile {
         }
 
         let fields_count = u2(r)?;
-        let fields = Field::fields(r, fields_count.into())?;
+        let fields = Field::fields(r, &constant_pool, fields_count.into())?;
 
         Ok(Self {
             minor_version,

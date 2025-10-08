@@ -1,38 +1,44 @@
 use std::{collections::HashSet, io::Read};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
-use crate::{class::constant_pool::CpIndex, util::u2};
+use crate::{
+    class::{
+        attribute::Attribute,
+        constant_pool::{ConstantPool, CpIndex},
+    },
+    util::u2,
+};
 
 pub struct Field {
     pub access_flags: HashSet<AccessFlag>,
     pub name_index: CpIndex,
     pub descriptor_index: CpIndex,
+    pub attributes: Vec<Attribute>,
 }
 
 impl Field {
-    pub fn new(r: &mut impl Read) -> Result<Self> {
+    pub fn new(r: &mut impl Read, cp: &ConstantPool) -> Result<Self> {
         let access_flags = AccessFlag::flags(r)?;
         let name_index = u2(r)?.into();
         let descriptor_index = u2(r)?.into();
 
         let attributes_count = u2(r)?;
-        if attributes_count != 0 {
-            bail!("too many attributes! {attributes_count}");
-        }
+        let attributes = Attribute::attributes(r, cp, attributes_count.into())?;
 
         Ok(Self {
             access_flags,
             name_index,
             descriptor_index,
+            attributes,
         })
     }
 
-    pub fn fields(r: &mut impl Read, count: usize) -> Result<Vec<Self>> {
+    pub fn fields(r: &mut impl Read, cp: &ConstantPool, count: usize) -> Result<Vec<Self>> {
         let mut fields = Vec::new();
 
         for _ in 0..count {
-            fields.push(Field::new(r)?);
+            fields.push(Field::new(r, cp)?);
         }
 
         Ok(fields)
