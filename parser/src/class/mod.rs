@@ -1,12 +1,14 @@
-use std::io::Read;
+use std::{collections::HashSet, io::Read};
 
 use anyhow::{Result, bail};
+use tracing::debug;
 
 use crate::{
-    class::constant_pool::ConstantPool,
+    class::{access_flags::AccessFlag, constant_pool::ConstantPool},
     util::{u2, u4},
 };
 
+mod access_flags;
 mod constant_pool;
 
 /// Representation of a class, interface or module
@@ -14,6 +16,7 @@ pub struct ClassFile {
     pub minor_version: u16,
     pub major_version: u16,
     pub constant_pool: ConstantPool,
+    pub access_flags: HashSet<AccessFlag>,
 }
 
 impl ClassFile {
@@ -38,10 +41,14 @@ impl ClassFile {
         let constant_pool_count = u2(r)?;
         let constant_pool = ConstantPool::new(r, constant_pool_count)?;
 
+        let access_flags = AccessFlag::flags(r)?;
+        debug!("access flags: {access_flags:?}");
+
         Ok(Self {
             minor_version,
             major_version,
             constant_pool,
+            access_flags,
         })
     }
 }
