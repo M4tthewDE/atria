@@ -8,6 +8,7 @@ use crate::{
         access_flags::AccessFlag,
         constant_pool::{ConstantPool, CpIndex},
         field::Field,
+        method::Method,
     },
     util::{u2, u4},
 };
@@ -16,6 +17,7 @@ mod access_flags;
 mod attribute;
 mod constant_pool;
 mod field;
+mod method;
 
 /// Representation of a class, interface or module
 pub struct ClassFile {
@@ -26,6 +28,7 @@ pub struct ClassFile {
     pub this_class: CpIndex,
     pub super_class: CpIndex,
     pub fields: Vec<Field>,
+    pub methods: Vec<Method>,
 }
 
 impl ClassFile {
@@ -64,6 +67,9 @@ impl ClassFile {
         let fields_count = u2(r)?;
         let fields = Field::fields(r, &constant_pool, fields_count.into())?;
 
+        let methods_count = u2(r)?;
+        let methods = Method::methods(r, &constant_pool, methods_count)?;
+
         Ok(Self {
             minor_version,
             major_version,
@@ -72,6 +78,7 @@ impl ClassFile {
             this_class,
             super_class,
             fields,
+            methods,
         })
     }
 }

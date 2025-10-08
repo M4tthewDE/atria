@@ -25,3 +25,9 @@ pub fn utf8(r: &mut impl Read, length: usize) -> Result<String> {
     r.read_exact(&mut buf)?;
     Ok(String::from_utf8(buf)?)
 }
+
+pub fn vec(r: &mut impl Read, length: usize) -> Result<Vec<u8>> {
+    let mut buf = vec![0; length];
+    r.read_exact(&mut buf)?;
+    Ok(buf)
+}
