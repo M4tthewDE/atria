@@ -3,10 +3,10 @@ use std::io::Read;
 use anyhow::{Context, Result, bail};
 use tracing::{debug, trace};
 
-use crate::util::{u1, u2, u4, utf8};
+use crate::util::{u1, u2, u4, u8, utf8};
 
 /// A valid index into the constant pool.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CpIndex(pub u16);
 
 impl From<u16> for CpIndex {
@@ -35,10 +35,22 @@ impl ConstantPool {
         let mut infos = Vec::with_capacity(count.into());
         infos.push(CpInfo::Reserved);
 
-        for i in 0..count {
+        let mut i = 0;
+        loop {
+            if i == count {
+                break;
+            }
+
             let cp_info = CpInfo::new(r)?;
+
             trace!("{}: {cp_info:?}", i + 1);
-            infos.push(cp_info);
+            infos.push(cp_info.clone());
+            if matches!(cp_info, CpInfo::Long(_)) {
+                infos.push(CpInfo::Reserved);
+                i += 2;
+            } else {
+                i += 1;
+            }
         }
 
         debug!("parsed {} constant pool items", count);
@@ -73,6 +85,7 @@ impl ConstantPool {
 
 const UTF8_TAG: u8 = 1;
 const INTEGER_TAG: u8 = 3;
+const LONG_TAG: u8 = 5;
 const CLASS_TAG: u8 = 7;
 const STRING_TAG: u8 = 8;
 const FIELD_REF_TAG: u8 = 9;
@@ -83,11 +96,12 @@ const METHOD_HANDLE_TAG: u8 = 15;
 const METHOD_TYPE_TAG: u8 = 16;
 const INVOKE_DYNAMIC_TAG: u8 = 18;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CpInfo {
     Reserved,
     Utf8(String),
     Integer(u32),
+    Long(u64),
     Class {
         name_index: CpIndex,
     },
@@ -133,6 +147,7 @@ impl CpInfo {
                 Ok(Self::Utf8(utf8(r, length.into())?))
             }
             INTEGER_TAG => Ok(Self::Integer(u4(r)?)),
+            LONG_TAG => Ok(Self::Long(u8(r)?)),
             CLASS_TAG => Ok(Self::Class {
                 name_index: u2(r)?.into(),
             }),
@@ -171,7 +186,7 @@ impl CpInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ReferenceKind {
     GetField,
     GetStatic,

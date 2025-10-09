@@ -20,6 +20,12 @@ pub fn u4(r: &mut impl Read) -> Result<u32> {
     Ok(u32::from_be_bytes(buf))
 }
 
+pub fn u8(r: &mut impl Read) -> Result<u64> {
+    let mut buf = [0; 8];
+    r.read_exact(&mut buf)?;
+    Ok(u64::from_be_bytes(buf))
+}
+
 pub fn utf8(r: &mut impl Read, length: usize) -> Result<String> {
     let mut buf = vec![0; length];
     r.read_exact(&mut buf)?;
