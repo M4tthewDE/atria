@@ -1,4 +1,7 @@
-use std::{collections::HashSet, io::Read};
+use std::{
+    collections::HashSet,
+    io::{Read, Seek},
+};
 
 use anyhow::Result;
 
@@ -18,7 +21,7 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn new(r: &mut impl Read, cp: &ConstantPool) -> Result<Self> {
+    pub fn new(r: &mut (impl Read + Seek), cp: &ConstantPool) -> Result<Self> {
         let access_flags = AccessFlag::flags(r)?;
         let name_index = u2(r)?.into();
         let descriptor_index = u2(r)?.into();
@@ -34,7 +37,11 @@ impl Field {
         })
     }
 
-    pub fn fields(r: &mut impl Read, cp: &ConstantPool, count: usize) -> Result<Vec<Self>> {
+    pub fn fields(
+        r: &mut (impl Read + Seek),
+        cp: &ConstantPool,
+        count: usize,
+    ) -> Result<Vec<Self>> {
         let mut fields = Vec::new();
 
         for _ in 0..count {

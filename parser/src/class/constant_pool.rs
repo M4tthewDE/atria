@@ -44,7 +44,7 @@ impl ConstantPool {
         if let CpInfo::Utf8(content) = self
             .infos
             .get(index.0 as usize)
-            .context("constant pool item at index {index} not found")?
+            .context(format!("constant pool item at index {} not found", index.0))?
         {
             Ok(content)
         } else {

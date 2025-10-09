@@ -1,4 +1,7 @@
-use std::{collections::HashSet, io::Read};
+use std::{
+    collections::HashSet,
+    io::{Read, Seek},
+};
 
 use anyhow::{Result, bail};
 use tracing::debug;
@@ -32,7 +35,7 @@ pub struct ClassFile {
 }
 
 impl ClassFile {
-    pub fn new(r: &mut impl Read) -> Result<Self> {
+    pub fn new(r: &mut (impl Read + Seek)) -> Result<Self> {
         let magic = u4(r)?;
 
         if magic != 0xCAFEBABE {

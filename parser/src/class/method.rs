@@ -1,5 +1,9 @@
 use anyhow::Result;
-use std::{collections::HashSet, io::Read};
+use std::{
+    collections::HashSet,
+    io::{Read, Seek},
+};
+use tracing::debug;
 
 use crate::{
     class::{
@@ -17,7 +21,7 @@ pub struct Method {
 }
 
 impl Method {
-    fn new(r: &mut impl Read, cp: &ConstantPool) -> Result<Self> {
+    fn new(r: &mut (impl Read + Seek), cp: &ConstantPool) -> Result<Self> {
         let access_flags = AccessFlag::flags(r)?;
         let name_index = u2(r)?.into();
         let descriptor_index = u2(r)?.into();
@@ -32,9 +36,10 @@ impl Method {
         })
     }
 
-    pub fn methods(r: &mut impl Read, cp: &ConstantPool, count: u16) -> Result<Vec<Self>> {
+    pub fn methods(r: &mut (impl Read + Seek), cp: &ConstantPool, count: u16) -> Result<Vec<Self>> {
         let mut methods = Vec::new();
 
+        debug!("parsing {count} methods");
         for _ in 0..count {
             methods.push(Method::new(r, cp)?);
         }
