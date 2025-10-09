@@ -28,6 +28,7 @@ const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
 const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
 const METHOD_PARAMETERS_ATTR_NAME: &str = "MethodParameters";
 
+#[derive(Clone)]
 pub enum Attribute {
     ConstantValue {
         attribute_name_index: CpIndex,
@@ -323,6 +324,7 @@ impl Attribute {
     }
 }
 
+#[derive(Clone)]
 pub struct Annotation {
     pub type_index: CpIndex,
     pub element_value_pairs: Vec<ElementValuePair>,
@@ -354,6 +356,7 @@ impl Annotation {
     }
 }
 
+#[derive(Clone)]
 pub struct ElementValuePair {
     pub element_name_index: CpIndex,
     pub value: ElementValue,
@@ -368,6 +371,7 @@ impl ElementValuePair {
     }
 }
 
+#[derive(Clone)]
 pub enum ElementValue {
     Boolean(CpIndex),
     String(CpIndex),
@@ -385,6 +389,7 @@ impl ElementValue {
     }
 }
 
+#[derive(Clone)]
 pub struct ExceptionHandler {
     pub start_pc: u16,
     pub end_pc: u16,
@@ -403,11 +408,13 @@ impl ExceptionHandler {
     }
 }
 
+#[derive(Clone)]
 pub struct LineNumberTableEntry {
     pub start_pc: u16,
     pub line_number: u16,
 }
 
+#[derive(Clone)]
 pub struct LocalVariableTableEntry {
     pub start_pc: u16,
     pub length: u16,
@@ -416,6 +423,7 @@ pub struct LocalVariableTableEntry {
     pub index: u16,
 }
 
+#[derive(Clone)]
 pub enum VerificationType {
     Integer,
     Object(CpIndex),
@@ -433,6 +441,7 @@ impl VerificationType {
     }
 }
 
+#[derive(Clone)]
 pub enum StackMapTableEntry {
     Same,
     SameLocals1StackItem {
@@ -503,6 +512,7 @@ impl StackMapTableEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalVariableTypeTableEntry {
     pub start_pc: u16,
     pub length: u16,
@@ -523,6 +533,7 @@ impl LocalVariableTypeTableEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct BootStrapMethod {
     pub method_ref: CpIndex,
     pub arguments: Vec<CpIndex>,
@@ -542,6 +553,7 @@ impl BootStrapMethod {
     }
 }
 
+#[derive(Clone)]
 pub struct InnerClass {
     pub inner_class_info_index: CpIndex,
     pub outer_class_info_index: CpIndex,
@@ -572,7 +584,7 @@ const ACC_ANNOTATION: u16 = 0x2000;
 const ACC_ENUM: u16 = 0x4000;
 const ACC_MANDATED: u16 = 0x8000;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub enum InnerClassAccessFlag {
     Public,
     Private,
@@ -636,6 +648,7 @@ impl InnerClassAccessFlag {
     }
 }
 
+#[derive(Clone)]
 pub struct MethodParameter {
     pub name_index: CpIndex,
     pub access_flags: HashSet<MethodParameterAccessFlag>,
@@ -650,7 +663,7 @@ impl MethodParameter {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub enum MethodParameterAccessFlag {
     Final,
     Synthetic,

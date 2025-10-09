@@ -24,6 +24,7 @@ mod field;
 mod method;
 
 /// Representation of a class, interface or module
+#[derive(Clone)]
 pub struct ClassFile {
     pub minor_version: u16,
     pub major_version: u16,

@@ -1,6 +1,8 @@
-use std::{fmt::Display, fs::File, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
+use parser::class::ClassFile;
+use tracing::trace;
 use zip::ZipArchive;
 
 use crate::{
@@ -16,6 +18,8 @@ mod loader;
 pub struct Jvm {
     class_loader: BootstrapClassLoader,
     main_class: ClassIdentifier,
+
+    class_files: HashMap<ClassIdentifier, ClassFile>,
 }
 
 impl Jvm {
@@ -29,23 +33,39 @@ impl Jvm {
         Ok(Self {
             class_loader,
             main_class,
+            class_files: HashMap::new(),
         })
     }
 
     pub fn run(&mut self) -> Result<()> {
-        self.load(&self.main_class.clone())?;
+        let class_file = self.load(&self.main_class.clone())?;
+        self.initialize(&class_file)?;
+
         bail!("TODO: run")
     }
 
-    fn load(&mut self, identifier: &ClassIdentifier) -> Result<()> {
-        self.class_loader.load(identifier)?;
+    fn load(&mut self, identifier: &ClassIdentifier) -> Result<ClassFile> {
+        Ok(match self.class_files.get(identifier) {
+            Some(cf) => {
+                trace!("class has already been loaded, skipping");
+                cf.clone()
+            }
+            None => {
+                let class_file = self.class_loader.load(identifier)?;
+                self.class_files
+                    .insert(identifier.clone(), class_file.clone());
+                class_file
+            }
+        })
+    }
 
-        bail!("TODO: jvm load")
+    fn initialize(&self, _class_file: &ClassFile) -> Result<()> {
+        bail!("TODO: jvm initialize")
     }
 }
 
 /// Identifies a class using package and name
-#[derive(Clone)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct ClassIdentifier {
     package: String,
     name: String,

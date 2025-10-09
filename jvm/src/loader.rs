@@ -18,7 +18,7 @@ impl BootstrapClassLoader {
         Self { sources }
     }
 
-    pub fn load(&mut self, identifier: &ClassIdentifier) -> Result<()> {
+    pub fn load(&mut self, identifier: &ClassIdentifier) -> Result<ClassFile> {
         debug!("loading class {identifier}");
 
         for source in &mut self.sources {
@@ -41,7 +41,7 @@ impl BootstrapClassLoader {
                 self.load(&identifier)?;
             }
 
-            bail!("TODO: load")
+            return Ok(class_file);
         }
 
         bail!("class {identifier} not found")

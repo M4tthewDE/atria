@@ -14,7 +14,7 @@ const ACC_ANNOTATION: u16 = 0x2000;
 const ACC_ENUM: u16 = 0x4000;
 const ACC_MODULE: u16 = 0x8000;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub enum AccessFlag {
     Public,
     Final,

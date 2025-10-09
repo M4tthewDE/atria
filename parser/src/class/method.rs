@@ -13,6 +13,7 @@ use crate::{
     util::u2,
 };
 
+#[derive(Clone)]
 pub struct Method {
     pub access_flags: HashSet<AccessFlag>,
     pub name_index: CpIndex,
@@ -61,7 +62,7 @@ const ACC_ABSTRACT: u16 = 0x0400;
 const ACC_STRICT: u16 = 0x0800;
 const ACC_SYNTHETIC: u16 = 0x1000;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub enum AccessFlag {
     Public,
     Private,

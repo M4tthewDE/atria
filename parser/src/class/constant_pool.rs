@@ -23,6 +23,7 @@ impl PartialEq<i32> for CpIndex {
 
 /// A table of structures representing various string constants,
 /// class and interface names, field names, and other constant structures
+#[derive(Clone)]
 pub struct ConstantPool {
     pub infos: Vec<CpInfo>,
 }
