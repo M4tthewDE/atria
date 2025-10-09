@@ -394,7 +394,9 @@ name = "jvm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "parser",
  "tracing",
+ "tracing-subscriber",
  "zip",
 ]
 
@@ -499,8 +501,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "tracing",
- "tracing-subscriber",
- "zip",
 ]
 
 [[package]]

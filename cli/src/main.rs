@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+use jvm::Jvm;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt};
 
@@ -23,5 +24,6 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let jar_file = File::open(args.jar)?;
 
-    jvm::run_jar(&jar_file)
+    let jvm = Jvm::default();
+    jvm.run(&jar_file)
 }

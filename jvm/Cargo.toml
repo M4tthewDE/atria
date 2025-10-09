@@ -5,5 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+parser = { version = "0.1.0", path = "../parser" }
 tracing = "0.1.41"
 zip = "5.1.1"
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
