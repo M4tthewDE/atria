@@ -25,7 +25,9 @@ impl Parser {
         let bytes = Self::load_bytes(identifier)?;
         debug!("loaded {} bytes", bytes.len());
 
-        ClassFile::new(&mut Cursor::new(bytes))
+        let class_file = ClassFile::new(&mut Cursor::new(bytes));
+        debug!("parsed {identifier}");
+        class_file
     }
 
     fn load_bytes(identifier: &ClassIdentifier) -> Result<Vec<u8>> {

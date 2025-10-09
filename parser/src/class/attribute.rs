@@ -1,5 +1,6 @@
 use std::{
     char,
+    collections::HashSet,
     io::{Read, Seek},
 };
 
@@ -20,7 +21,11 @@ const STACK_MAP_TABLE_ATTR_NAME: &str = "StackMapTable";
 const EXCEPTIONS_ATTR_NAME: &str = "Exceptions";
 const LOCAL_VARIABLE_TYPE_TABLE_ATTR_NAME: &str = "LocalVariableTypeTable";
 const SIGNATURE_ATTR_NAME: &str = "Signature";
-const DEPRECATED: &str = "Deprecated";
+const DEPRECATED_ATTR_NAME: &str = "Deprecated";
+const SOURCE_FILE_ATTR_NAME: &str = "SourceFile";
+const NEST_MEMBERS_ATTR_NAME: &str = "NestMembers";
+const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
+const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
 
 pub enum Attribute {
     ConstantValue {
@@ -75,6 +80,26 @@ pub enum Attribute {
     Deprecated {
         attribute_name_index: CpIndex,
         attribute_length: u32,
+    },
+    SourceFile {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        source_file_index: CpIndex,
+    },
+    NestMembers {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        classes: Vec<CpIndex>,
+    },
+    BootstrapMethods {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        methods: Vec<BootStrapMethod>,
+    },
+    InnerClasses {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        inner_classes: Vec<InnerClass>,
     },
 }
 
@@ -209,15 +234,56 @@ impl Attribute {
                     local_variable_type_table,
                 }
             }
-            SIGNATURE_ATTR_NAME => Attribute::Signature {
+            SIGNATURE_ATTR_NAME => Self::Signature {
                 attribute_name_index,
                 attribute_length,
                 signature_index: u2(r)?.into(),
             },
-            DEPRECATED => Attribute::Deprecated {
+            DEPRECATED_ATTR_NAME => Self::Deprecated {
                 attribute_name_index,
                 attribute_length,
             },
+            SOURCE_FILE_ATTR_NAME => Self::SourceFile {
+                attribute_name_index,
+                attribute_length,
+                source_file_index: u2(r)?.into(),
+            },
+            NEST_MEMBERS_ATTR_NAME => {
+                let number_of_classes = u2(r)?;
+                let mut classes = Vec::new();
+                for _ in 0..number_of_classes {
+                    classes.push(u2(r)?.into());
+                }
+                Self::NestMembers {
+                    attribute_name_index,
+                    attribute_length,
+                    classes,
+                }
+            }
+            BOOTSTRAP_METHODS_ATTR_NAME => {
+                let mut methods = Vec::new();
+                for _ in 0..u2(r)? {
+                    methods.push(BootStrapMethod::new(r)?);
+                }
+
+                Self::BootstrapMethods {
+                    attribute_name_index,
+                    attribute_length,
+                    methods,
+                }
+            }
+            INNER_CLASSES_ATTR_NAME => {
+                let mut inner_classes = Vec::new();
+                for _ in 0..u2(r)? {
+                    inner_classes.push(InnerClass::new(r)?);
+                }
+
+                Self::InnerClasses {
+                    attribute_name_index,
+                    attribute_length,
+                    inner_classes,
+                }
+            }
             _ => bail!("unknown attribute {}", name),
         });
         trace!("parsed bytes: {}", r.stream_position()? - before);
@@ -436,5 +502,117 @@ impl LocalVariableTypeTableEntry {
             signature_index: u2(r)?.into(),
             index: u2(r)?,
         })
+    }
+}
+
+pub struct BootStrapMethod {
+    pub method_ref: CpIndex,
+    pub arguments: Vec<CpIndex>,
+}
+
+impl BootStrapMethod {
+    fn new(r: &mut impl Read) -> Result<Self> {
+        let method_ref = u2(r)?.into();
+        let mut arguments = Vec::new();
+        for _ in 0..u2(r)? {
+            arguments.push(u2(r)?.into());
+        }
+        Ok(Self {
+            method_ref,
+            arguments,
+        })
+    }
+}
+
+pub struct InnerClass {
+    pub inner_class_info_index: CpIndex,
+    pub outer_class_info_index: CpIndex,
+    pub inner_name_index: CpIndex,
+    pub access_flags: HashSet<InnerClassAccessFlag>,
+}
+
+impl InnerClass {
+    fn new(r: &mut impl Read) -> Result<Self> {
+        Ok(Self {
+            inner_class_info_index: u2(r)?.into(),
+            outer_class_info_index: u2(r)?.into(),
+            inner_name_index: u2(r)?.into(),
+            access_flags: InnerClassAccessFlag::flags(r)?,
+        })
+    }
+}
+
+const ACC_PUBLIC: u16 = 0x0001;
+const ACC_PRIVATE: u16 = 0x0002;
+const ACC_PROTECTED: u16 = 0x0004;
+const ACC_STATIC: u16 = 0x0008;
+const ACC_FINAL: u16 = 0x0010;
+const ACC_INTERFACE: u16 = 0x0200;
+const ACC_ABSTRACT: u16 = 0x0400;
+const ACC_SYNTHETIC: u16 = 0x1000;
+const ACC_ANNOTATION: u16 = 0x2000;
+const ACC_ENUM: u16 = 0x4000;
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub enum InnerClassAccessFlag {
+    Public,
+    Private,
+    Protected,
+    Static,
+    Final,
+    Interface,
+    Abstract,
+    Synthetic,
+    Annotation,
+    Enum,
+}
+
+impl InnerClassAccessFlag {
+    pub fn flags(r: &mut impl Read) -> Result<HashSet<Self>> {
+        let raw_flags = u2(r)?;
+
+        let mut flags = HashSet::new();
+
+        if raw_flags & ACC_PUBLIC > 0 {
+            flags.insert(Self::Public);
+        }
+
+        if raw_flags & ACC_PRIVATE > 0 {
+            flags.insert(Self::Private);
+        }
+
+        if raw_flags & ACC_PROTECTED > 0 {
+            flags.insert(Self::Protected);
+        }
+
+        if raw_flags & ACC_STATIC > 0 {
+            flags.insert(Self::Static);
+        }
+
+        if raw_flags & ACC_FINAL > 0 {
+            flags.insert(Self::Final);
+        }
+
+        if raw_flags & ACC_INTERFACE > 0 {
+            flags.insert(Self::Interface);
+        }
+
+        if raw_flags & ACC_ABSTRACT > 0 {
+            flags.insert(Self::Abstract);
+        }
+
+        if raw_flags & ACC_SYNTHETIC > 0 {
+            flags.insert(Self::Synthetic);
+        }
+
+        if raw_flags & ACC_ANNOTATION > 0 {
+            flags.insert(Self::Annotation);
+        }
+
+        if raw_flags & ACC_ENUM > 0 {
+            flags.insert(Self::Enum);
+        }
+
+        Ok(flags)
     }
 }

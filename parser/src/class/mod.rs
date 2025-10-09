@@ -9,6 +9,7 @@ use tracing::debug;
 use crate::{
     class::{
         access_flags::AccessFlag,
+        attribute::Attribute,
         constant_pool::{ConstantPool, CpIndex},
         field::Field,
         method::Method,
@@ -32,6 +33,7 @@ pub struct ClassFile {
     pub super_class: CpIndex,
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
+    pub attributes: Vec<Attribute>,
 }
 
 impl ClassFile {
@@ -73,6 +75,9 @@ impl ClassFile {
         let methods_count = u2(r)?;
         let methods = Method::methods(r, &constant_pool, methods_count)?;
 
+        let attributes_count = u2(r)?;
+        let attributes = Attribute::attributes(r, &constant_pool, attributes_count.into())?;
+
         Ok(Self {
             minor_version,
             major_version,
@@ -82,6 +87,7 @@ impl ClassFile {
             super_class,
             fields,
             methods,
+            attributes,
         })
     }
 }
