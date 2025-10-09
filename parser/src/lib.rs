@@ -9,8 +9,8 @@ pub mod class;
 mod util;
 
 pub fn parse(r: &mut (impl Read + Seek)) -> Result<ClassFile> {
-    debug!("parsing class");
+    debug!("parsing class file");
     let class = ClassFile::new(r)?;
-    debug!("parsed class");
+    debug!("parsed class file");
     Ok(class)
 }

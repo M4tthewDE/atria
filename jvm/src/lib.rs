@@ -3,9 +3,14 @@ use std::{fmt::Display, fs::File, path::PathBuf};
 use anyhow::{Context, Result, bail};
 use zip::ZipArchive;
 
-use crate::{jar::Jar, loader::BootstrapClassLoader};
+use crate::{
+    jar::Jar,
+    jdk::Jdk,
+    loader::{BootstrapClassLoader, ReadClass},
+};
 
 mod jar;
+mod jdk;
 mod loader;
 
 pub struct Jvm {
@@ -18,7 +23,8 @@ impl Jvm {
         let archive = ZipArchive::new(file)?;
         let mut jar = Jar::new(archive);
         let main_class = jar.manifest()?.main_class;
-        let class_loader = BootstrapClassLoader::new(jar);
+        let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk::new()?)];
+        let class_loader = BootstrapClassLoader::new(sources);
 
         Ok(Self {
             class_loader,
@@ -32,7 +38,7 @@ impl Jvm {
     }
 
     fn load(&mut self, identifier: &ClassIdentifier) -> Result<()> {
-        let _class = self.class_loader.load(identifier)?;
+        self.class_loader.load(identifier)?;
 
         bail!("TODO: jvm load")
     }

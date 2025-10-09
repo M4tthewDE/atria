@@ -14,17 +14,19 @@ pub struct BootstrapClassLoader {
 }
 
 impl BootstrapClassLoader {
-    pub fn new(source: impl ReadClass + 'static) -> Self {
-        Self {
-            sources: vec![Box::new(source)],
-        }
+    pub fn new(sources: Vec<Box<dyn ReadClass>>) -> Self {
+        Self { sources }
     }
 
     pub fn load(&mut self, identifier: &ClassIdentifier) -> Result<()> {
         debug!("loading class {identifier}");
 
         for source in &mut self.sources {
-            let class_bytes = source.read_class(identifier)?;
+            let class_bytes = match source.read_class(identifier) {
+                Ok(bytes) => bytes,
+                Err(_) => continue,
+            };
+
             let class_file = parser::parse(&mut Cursor::new(class_bytes))
                 .context("should throw ClassFormatError")?;
 
@@ -35,7 +37,7 @@ impl BootstrapClassLoader {
                 let name = class_file
                     .constant_pool
                     .class_name(&class_file.super_class)?;
-                let identifier = ClassIdentifier::from_path(&name)?;
+                let identifier = ClassIdentifier::from_path(name)?;
                 self.load(&identifier)?;
             }
 
