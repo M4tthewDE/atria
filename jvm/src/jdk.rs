@@ -2,7 +2,6 @@ use std::{fs::File, io::Read, path::PathBuf};
 
 use crate::loader::ReadClass;
 use anyhow::{Context, Result, bail};
-use tracing::debug;
 use zip::{ZipArchive, result::ZipError};
 
 pub struct Jdk {
@@ -20,7 +19,6 @@ impl Jdk {
 impl ReadClass for Jdk {
     fn read_class(&mut self, identifier: &crate::ClassIdentifier) -> Result<Vec<u8>> {
         let jmods_path = self.java_home_path.join("jmods");
-        debug!("loading jmods from {jmods_path:?}");
 
         for jmod_dir_entry in jmods_path.read_dir()? {
             let jmod_path = jmod_dir_entry?.path();

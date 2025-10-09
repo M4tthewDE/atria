@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use anyhow::{Context, Result, bail};
-use tracing::{debug, trace};
+use tracing::trace;
 
 use crate::util::{u1, u2, u4, u8, utf8};
 
@@ -54,7 +54,7 @@ impl ConstantPool {
             }
         }
 
-        debug!("parsed {} constant pool items", count);
+        trace!("parsed {} constant pool items", count);
 
         Ok(Self { infos })
     }

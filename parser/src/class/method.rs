@@ -3,7 +3,7 @@ use std::{
     collections::HashSet,
     io::{Read, Seek},
 };
-use tracing::debug;
+use tracing::trace;
 
 use crate::{
     class::{
@@ -40,7 +40,7 @@ impl Method {
     pub fn methods(r: &mut (impl Read + Seek), cp: &ConstantPool, count: u16) -> Result<Vec<Self>> {
         let mut methods = Vec::new();
 
-        debug!("parsing {count} methods");
+        trace!("parsing {count} methods");
         for _ in 0..count {
             methods.push(Method::new(r, cp)?);
         }

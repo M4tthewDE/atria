@@ -1,16 +1,17 @@
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use parser::class::ClassFile;
-use tracing::trace;
+use tracing::debug;
 use zip::ZipArchive;
 
 use crate::{
+    class::Class,
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
 };
 
+mod class;
 mod jar;
 mod jdk;
 mod loader;
@@ -19,7 +20,7 @@ pub struct Jvm {
     class_loader: BootstrapClassLoader,
     main_class: ClassIdentifier,
 
-    class_files: HashMap<ClassIdentifier, ClassFile>,
+    classes: HashMap<ClassIdentifier, Class>,
 }
 
 impl Jvm {
@@ -33,34 +34,40 @@ impl Jvm {
         Ok(Self {
             class_loader,
             main_class,
-            class_files: HashMap::new(),
+            classes: HashMap::new(),
         })
     }
 
     pub fn run(&mut self) -> Result<()> {
-        let class_file = self.load(&self.main_class.clone())?;
-        self.initialize(&class_file)?;
+        let identifier = self.main_class.clone();
+
+        self.initialize(&identifier)?;
 
         bail!("TODO: run")
     }
 
-    fn load(&mut self, identifier: &ClassIdentifier) -> Result<ClassFile> {
-        Ok(match self.class_files.get(identifier) {
-            Some(cf) => {
-                trace!("class has already been loaded, skipping");
-                cf.clone()
-            }
-            None => {
-                let class_file = self.class_loader.load(identifier)?;
-                self.class_files
-                    .insert(identifier.clone(), class_file.clone());
-                class_file
-            }
-        })
-    }
+    fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<()> {
+        if self.classes.contains_key(identifier) {
+            return Ok(());
+        }
 
-    fn initialize(&self, _class_file: &ClassFile) -> Result<()> {
-        bail!("TODO: jvm initialize")
+        let class_file = self.class_loader.load(identifier)?;
+
+        debug!("initializing {identifier}");
+        let mut class = Class::new(identifier.clone(), class_file);
+        class.initialize_fields()?;
+
+        if class.class_file.super_class != 0 {
+            let name = class
+                .class_file
+                .constant_pool
+                .class_name(&class.class_file.super_class)?;
+            let identifier = ClassIdentifier::from_path(name)?;
+            self.initialize(&identifier)?;
+        }
+
+        self.classes.insert(identifier.clone(), class);
+        Ok(())
     }
 }
 

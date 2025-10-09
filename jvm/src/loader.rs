@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{collections::HashMap, io::Cursor};
 
 use crate::ClassIdentifier;
 use anyhow::{Context, Result, bail};
@@ -11,15 +11,23 @@ pub trait ReadClass {
 
 pub struct BootstrapClassLoader {
     sources: Vec<Box<dyn ReadClass>>,
+    class_files: HashMap<ClassIdentifier, ClassFile>,
 }
 
 impl BootstrapClassLoader {
     pub fn new(sources: Vec<Box<dyn ReadClass>>) -> Self {
-        Self { sources }
+        Self {
+            sources,
+            class_files: HashMap::new(),
+        }
     }
 
     pub fn load(&mut self, identifier: &ClassIdentifier) -> Result<ClassFile> {
-        debug!("loading class {identifier}");
+        if let Some(cf) = self.class_files.get(identifier) {
+            return Ok(cf.clone());
+        }
+
+        debug!("loading {identifier}");
 
         for source in &mut self.sources {
             let class_bytes = match source.read_class(identifier) {
@@ -41,6 +49,9 @@ impl BootstrapClassLoader {
                 self.load(&identifier)?;
             }
 
+            self.class_files
+                .insert(identifier.clone(), class_file.clone());
+            debug!("loaded {identifier}");
             return Ok(class_file);
         }
 

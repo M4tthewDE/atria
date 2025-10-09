@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Result, bail};
-use tracing::debug;
+use tracing::trace;
 
 use crate::{
     class::{
@@ -20,7 +20,7 @@ use crate::{
 pub mod access_flags;
 mod attribute;
 mod constant_pool;
-mod field;
+pub mod field;
 mod method;
 
 /// Representation of a class, interface or module
@@ -52,7 +52,7 @@ impl ClassFile {
         let constant_pool = ConstantPool::new(r, constant_pool_count)?;
 
         let access_flags = AccessFlag::flags(r)?;
-        debug!("access flags: {access_flags:?}");
+        trace!("access flags: {access_flags:?}");
 
         let this_class = u2(r)?.into();
         let super_class = u2(r)?.into();
