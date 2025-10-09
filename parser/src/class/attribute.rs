@@ -26,6 +26,7 @@ const SOURCE_FILE_ATTR_NAME: &str = "SourceFile";
 const NEST_MEMBERS_ATTR_NAME: &str = "NestMembers";
 const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
 const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
+const METHOD_PARAMETERS_ATTR_NAME: &str = "MethodParameters";
 
 pub enum Attribute {
     ConstantValue {
@@ -100,6 +101,11 @@ pub enum Attribute {
         attribute_name_index: CpIndex,
         attribute_length: u32,
         inner_classes: Vec<InnerClass>,
+    },
+    MethodParameters {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        parameters: Vec<MethodParameter>,
     },
 }
 
@@ -282,6 +288,18 @@ impl Attribute {
                     attribute_name_index,
                     attribute_length,
                     inner_classes,
+                }
+            }
+            METHOD_PARAMETERS_ATTR_NAME => {
+                let mut parameters = Vec::new();
+                for _ in 0..u1(r)? {
+                    parameters.push(MethodParameter::new(r)?);
+                }
+
+                Self::MethodParameters {
+                    attribute_name_index,
+                    attribute_length,
+                    parameters,
                 }
             }
             _ => bail!("unknown attribute {}", name),
@@ -552,6 +570,7 @@ const ACC_ABSTRACT: u16 = 0x0400;
 const ACC_SYNTHETIC: u16 = 0x1000;
 const ACC_ANNOTATION: u16 = 0x2000;
 const ACC_ENUM: u16 = 0x4000;
+const ACC_MANDATED: u16 = 0x8000;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub enum InnerClassAccessFlag {
@@ -611,6 +630,49 @@ impl InnerClassAccessFlag {
 
         if raw_flags & ACC_ENUM > 0 {
             flags.insert(Self::Enum);
+        }
+
+        Ok(flags)
+    }
+}
+
+pub struct MethodParameter {
+    pub name_index: CpIndex,
+    pub access_flags: HashSet<MethodParameterAccessFlag>,
+}
+
+impl MethodParameter {
+    pub fn new(r: &mut impl Read) -> Result<Self> {
+        Ok(Self {
+            name_index: u2(r)?.into(),
+            access_flags: MethodParameterAccessFlag::flags(r)?,
+        })
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub enum MethodParameterAccessFlag {
+    Final,
+    Synthetic,
+    Mandated,
+}
+
+impl MethodParameterAccessFlag {
+    pub fn flags(r: &mut impl Read) -> Result<HashSet<Self>> {
+        let raw_flags = u2(r)?;
+
+        let mut flags = HashSet::new();
+
+        if raw_flags & ACC_FINAL > 0 {
+            flags.insert(Self::Final);
+        }
+
+        if raw_flags & ACC_SYNTHETIC > 0 {
+            flags.insert(Self::Synthetic);
+        }
+
+        if raw_flags & ACC_MANDATED > 0 {
+            flags.insert(Self::Mandated);
         }
 
         Ok(flags)
