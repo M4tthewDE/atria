@@ -17,7 +17,7 @@ use crate::{
     util::{u2, u4},
 };
 
-mod access_flags;
+pub mod access_flags;
 mod attribute;
 mod constant_pool;
 mod field;
@@ -46,14 +46,6 @@ impl ClassFile {
 
         let minor_version = u2(r)?;
         let major_version = u2(r)?;
-
-        if major_version != 61 && minor_version != 0 {
-            bail!(
-                "unsupported class file version {}.{}",
-                major_version,
-                minor_version
-            );
-        }
 
         let constant_pool_count = u2(r)?;
         let constant_pool = ConstantPool::new(r, constant_pool_count)?;

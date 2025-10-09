@@ -15,6 +15,12 @@ impl From<u16> for CpIndex {
     }
 }
 
+impl PartialEq<i32> for CpIndex {
+    fn eq(&self, other: &i32) -> bool {
+        *other == self.0.into()
+    }
+}
+
 /// A table of structures representing various string constants,
 /// class and interface names, field names, and other constant structures
 pub struct ConstantPool {
@@ -47,6 +53,18 @@ impl ConstantPool {
             .context(format!("constant pool item at index {} not found", index.0))?
         {
             Ok(content)
+        } else {
+            bail!("no utf8 constant pool item found at index {index:?}")
+        }
+    }
+
+    pub fn class_name(&self, index: &CpIndex) -> Result<&str> {
+        if let CpInfo::Class { name_index } = self
+            .infos
+            .get(index.0 as usize)
+            .context(format!("constant pool item at index {} not found", index.0))?
+        {
+            self.utf8(name_index)
         } else {
             bail!("no utf8 constant pool item found at index {index:?}")
         }
