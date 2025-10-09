@@ -1,28 +1,30 @@
 use anyhow::{Result, bail};
-use std::io::{Read, Seek};
+use std::{fs::File, io::Read};
 
 use zip::ZipArchive;
 
-use crate::ClassIdentifier;
+use crate::{ClassIdentifier, loader::ReadClass};
 
-pub struct Jar<'a, R: Read + Seek> {
-    archive: &'a mut ZipArchive<R>,
+pub struct Jar {
+    archive: ZipArchive<File>,
 }
 
-impl<'a, R: Read + Seek> Jar<'a, R> {
-    pub fn new(archive: &'a mut ZipArchive<R>) -> Self {
-        Self { archive }
-    }
-
-    pub(crate) fn manifest(&mut self) -> Result<Manifest> {
-        Manifest::new(self.archive)
-    }
-
-    pub(crate) fn class(&mut self, identifier: &ClassIdentifier) -> Result<Vec<u8>> {
+impl ReadClass for Jar {
+    fn read_class(&mut self, identifier: &ClassIdentifier) -> Result<Vec<u8>> {
         let mut r = self.archive.by_name(&identifier.path()?)?;
         let mut contents = Vec::new();
         r.read_to_end(&mut contents)?;
         Ok(contents)
+    }
+}
+
+impl Jar {
+    pub fn new(archive: ZipArchive<File>) -> Self {
+        Self { archive }
+    }
+
+    pub(crate) fn manifest(&mut self) -> Result<Manifest> {
+        Manifest::new(&mut self.archive)
     }
 }
 
@@ -31,7 +33,7 @@ pub(crate) struct Manifest {
 }
 
 impl Manifest {
-    fn new(archive: &mut ZipArchive<impl Read + Seek>) -> Result<Self> {
+    fn new(archive: &mut ZipArchive<File>) -> Result<Self> {
         let mut r = archive.by_name("META-INF/MANIFEST.MF")?;
         let mut contents = String::new();
         r.read_to_string(&mut contents)?;

@@ -24,6 +24,6 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let jar_file = File::open(args.jar)?;
 
-    let jvm = Jvm::default();
-    jvm.run(&jar_file)
+    let mut jvm = Jvm::from_jar(jar_file)?;
+    jvm.run()
 }

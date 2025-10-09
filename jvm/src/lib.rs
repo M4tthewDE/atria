@@ -1,28 +1,34 @@
-use std::{
-    fmt::Display,
-    io::{Cursor, Read, Seek},
-    path::PathBuf,
-};
+use std::{fmt::Display, fs::File, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use zip::ZipArchive;
 
-use crate::jar::Jar;
+use crate::{jar::Jar, loader::ClassLoader};
 
 mod jar;
+mod loader;
 
-#[derive(Default)]
-pub struct Jvm {}
+pub struct Jvm {
+    class_loader: ClassLoader,
+    main_class: ClassIdentifier,
+}
 
 impl Jvm {
-    pub fn run(&self, r: impl Read + Seek) -> Result<()> {
-        let mut archive = ZipArchive::new(r)?;
-        let mut jar = Jar::new(&mut archive);
-        let manifest = jar.manifest()?;
-        let main_class = jar.class(&manifest.main_class)?;
-        parser::parse(&mut Cursor::new(main_class))?;
+    pub fn from_jar(file: File) -> Result<Self> {
+        let archive = ZipArchive::new(file)?;
+        let mut jar = Jar::new(archive);
+        let main_class = jar.manifest()?.main_class;
+        let class_loader = ClassLoader::new(jar);
 
-        Ok(())
+        Ok(Self {
+            class_loader,
+            main_class,
+        })
+    }
+
+    pub fn run(&mut self) -> Result<()> {
+        let _class = self.class_loader.load(&self.main_class)?;
+        bail!("TODO: run")
     }
 }
 
@@ -78,14 +84,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn system() {
+    fn system() -> Result<()> {
         tracing_subscriber::registry()
             .with(fmt::layer())
             .with(EnvFilter::from_default_env())
             .init();
 
-        let mut file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
-        let jvm = Jvm::default();
-        jvm.run(&mut file).unwrap();
+        let file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
+        let mut jvm = Jvm::from_jar(file)?;
+        jvm.run()
     }
 }
