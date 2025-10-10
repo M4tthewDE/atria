@@ -7,7 +7,7 @@ pub struct Code {
 }
 
 impl Code {
-    pub fn new(bytes: &Vec<u8>) -> Result<Self> {
+    pub fn new(bytes: &[u8]) -> Result<Self> {
         let mut instructions = Vec::new();
         let mut i = 0;
         loop {

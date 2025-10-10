@@ -1,15 +1,17 @@
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
+use parser::class::constant_pool::{CpIndex, CpInfo};
 use tracing::debug;
 use zip::ZipArchive;
 
 use crate::{
     class::Class,
-    code::Code,
+    code::{Code, Instruction},
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
+    stack::{OperandValue, Stack},
 };
 
 mod class;
@@ -17,12 +19,14 @@ mod code;
 mod jar;
 mod jdk;
 mod loader;
+mod stack;
 
 pub struct Jvm {
     class_loader: BootstrapClassLoader,
     main_class: ClassIdentifier,
 
     classes: HashMap<ClassIdentifier, Class>,
+    stack: Stack,
 }
 
 impl Jvm {
@@ -37,6 +41,7 @@ impl Jvm {
             class_loader,
             main_class,
             classes: HashMap::new(),
+            stack: Stack::default(),
         })
     }
 
@@ -75,33 +80,50 @@ impl Jvm {
     }
 
     fn execute_clinit(&mut self, class: &mut Class) -> Result<()> {
-        if let Some(clinit_method) = class.class_file.clinit() {
+        if let Some(clinit_method) = class.class_file.clone().clinit() {
             debug!("executing <clinit> for {}", class.identifier);
+
+            self.stack.push("<clinit>".to_string());
 
             let code_bytes = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             let code = Code::new(code_bytes)?;
             debug!("{:?}", &code);
-            self.execute(&code)?;
+            self.execute(&code, class)?;
         }
 
         Ok(())
     }
 
-    fn execute(&self, code: &Code) -> Result<()> {
+    fn execute(&mut self, code: &Code, current_class: &mut Class) -> Result<()> {
         for instruction in &code.instructions {
             match instruction {
+                Instruction::Ldc(index) => self.ldc(index, current_class)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
 
         Ok(())
     }
+
+    fn ldc(&mut self, index: &CpIndex, current_class: &mut Class) -> Result<()> {
+        match current_class.class_file.cp_item(index)? {
+            CpInfo::Class { name_index } => {
+                let name = current_class.class_file.constant_pool.utf8(name_index)?;
+                let identifier = ClassIdentifier::from_path(name)?;
+                self.class_loader.load(&identifier)?;
+
+                self.stack
+                    .push_operand(OperandValue::ClassReference(identifier))
+            }
+            info => bail!("item {info:?} at index {index:?} is not loadable"),
+        }
+    }
 }
 
 /// Identifies a class using package and name
-#[derive(Clone, Eq, Hash, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq, Debug)]
 struct ClassIdentifier {
     package: String,
     name: String,
