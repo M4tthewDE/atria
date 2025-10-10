@@ -47,6 +47,13 @@ impl Method {
 
         Ok(methods)
     }
+
+    pub fn code(&self) -> Option<&Vec<u8>> {
+        self.attributes.iter().find_map(|attr| match attr {
+            Attribute::Code { code, .. } => Some(code),
+            _ => None,
+        })
+    }
 }
 
 const ACC_PUBLIC: u16 = 0x0001;

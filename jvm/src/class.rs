@@ -6,13 +6,13 @@ use parser::class::{
     constant_pool::{CpIndex, CpInfo},
     field::Field,
 };
-use tracing::debug;
+use tracing::trace;
 
 use crate::ClassIdentifier;
 
 #[derive(Clone)]
 pub struct Class {
-    _identifier: ClassIdentifier,
+    pub identifier: ClassIdentifier,
     fields: HashMap<String, FieldValue>,
     pub class_file: ClassFile,
 }
@@ -20,7 +20,7 @@ pub struct Class {
 impl Class {
     pub fn new(identifier: ClassIdentifier, class_file: ClassFile) -> Self {
         Self {
-            _identifier: identifier,
+            identifier,
             class_file,
             fields: HashMap::default(),
         }
@@ -39,7 +39,7 @@ impl Class {
     fn initialize_static_final_field(&mut self, field: &Field) -> Result<()> {
         let name = self.class_file.constant_pool.utf8(&field.name_index)?;
 
-        debug!("initializing field {name}");
+        trace!("initializing field {name}");
 
         if let Some(constant_value_index) = field.get_constant_value_index() {
             let field_value = self.resolve_constant_value(constant_value_index)?;

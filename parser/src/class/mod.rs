@@ -90,4 +90,16 @@ impl ClassFile {
             .get(index.0 as usize)
             .context(format!("no constant pool item at index {index:?}"))
     }
+
+    pub fn clinit(&self) -> Option<&Method> {
+        for method in &self.methods {
+            // TODO: this silently fails, return a Result with proper error types instead
+            let name = self.constant_pool.utf8(&method.name_index).ok()?;
+            if name == "<clinit>" {
+                return Some(method);
+            }
+        }
+
+        None
+    }
 }

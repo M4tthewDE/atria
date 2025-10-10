@@ -6,12 +6,14 @@ use zip::ZipArchive;
 
 use crate::{
     class::Class,
+    code::Code,
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
 };
 
 mod class;
+mod code;
 mod jar;
 mod jdk;
 mod loader;
@@ -66,10 +68,34 @@ impl Jvm {
             self.initialize(&identifier)?;
         }
 
-        bail!("execute the class or interface initialiation method");
-
+        self.execute_clinit(&mut class)?;
         self.classes.insert(identifier.clone(), class);
         debug!("initialized {identifier}");
+        Ok(())
+    }
+
+    fn execute_clinit(&mut self, class: &mut Class) -> Result<()> {
+        if let Some(clinit_method) = class.class_file.clinit() {
+            debug!("executing <clinit> for {}", class.identifier);
+
+            let code_bytes = clinit_method
+                .code()
+                .context("no code found for <clinit> method")?;
+            let code = Code::new(code_bytes)?;
+            debug!("{:?}", &code);
+            self.execute(&code)?;
+        }
+
+        Ok(())
+    }
+
+    fn execute(&self, code: &Code) -> Result<()> {
+        for instruction in &code.instructions {
+            match instruction {
+                _ => bail!("instruction {instruction:?} is not supported"),
+            }
+        }
+
         Ok(())
     }
 }

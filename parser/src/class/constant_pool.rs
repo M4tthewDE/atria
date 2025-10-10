@@ -15,6 +15,12 @@ impl From<u16> for CpIndex {
     }
 }
 
+impl From<u8> for CpIndex {
+    fn from(value: u8) -> Self {
+        Self(value as u16)
+    }
+}
+
 impl PartialEq<i32> for CpIndex {
     fn eq(&self, other: &i32) -> bool {
         *other == self.0.into()
