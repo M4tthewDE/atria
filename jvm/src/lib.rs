@@ -66,7 +66,10 @@ impl Jvm {
             self.initialize(&identifier)?;
         }
 
+        bail!("execute the class or interface initialiation method");
+
         self.classes.insert(identifier.clone(), class);
+        debug!("initialized {identifier}");
         Ok(())
     }
 }

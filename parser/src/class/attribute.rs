@@ -28,7 +28,7 @@ const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
 const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
 const METHOD_PARAMETERS_ATTR_NAME: &str = "MethodParameters";
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Attribute {
     ConstantValue {
         attribute_name_index: CpIndex,
@@ -324,7 +324,7 @@ impl Attribute {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Annotation {
     pub type_index: CpIndex,
     pub element_value_pairs: Vec<ElementValuePair>,
@@ -356,7 +356,7 @@ impl Annotation {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ElementValuePair {
     pub element_name_index: CpIndex,
     pub value: ElementValue,
@@ -371,7 +371,7 @@ impl ElementValuePair {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ElementValue {
     Boolean(CpIndex),
     String(CpIndex),
@@ -389,7 +389,7 @@ impl ElementValue {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExceptionHandler {
     pub start_pc: u16,
     pub end_pc: u16,
@@ -408,13 +408,13 @@ impl ExceptionHandler {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LineNumberTableEntry {
     pub start_pc: u16,
     pub line_number: u16,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalVariableTableEntry {
     pub start_pc: u16,
     pub length: u16,
@@ -423,7 +423,7 @@ pub struct LocalVariableTableEntry {
     pub index: u16,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum VerificationType {
     Integer,
     Object(CpIndex),
@@ -441,7 +441,7 @@ impl VerificationType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum StackMapTableEntry {
     Same,
     SameLocals1StackItem {
@@ -512,7 +512,7 @@ impl StackMapTableEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalVariableTypeTableEntry {
     pub start_pc: u16,
     pub length: u16,
@@ -533,7 +533,7 @@ impl LocalVariableTypeTableEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BootStrapMethod {
     pub method_ref: CpIndex,
     pub arguments: Vec<CpIndex>,
@@ -553,7 +553,7 @@ impl BootStrapMethod {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InnerClass {
     pub inner_class_info_index: CpIndex,
     pub outer_class_info_index: CpIndex,
@@ -648,7 +648,7 @@ impl InnerClassAccessFlag {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MethodParameter {
     pub name_index: CpIndex,
     pub access_flags: HashSet<MethodParameterAccessFlag>,

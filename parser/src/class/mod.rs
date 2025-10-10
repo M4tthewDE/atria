@@ -3,14 +3,14 @@ use std::{
     io::{Read, Seek},
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use tracing::trace;
 
 use crate::{
     class::{
         access_flags::AccessFlag,
         attribute::Attribute,
-        constant_pool::{ConstantPool, CpIndex},
+        constant_pool::{ConstantPool, CpIndex, CpInfo},
         field::Field,
         method::Method,
     },
@@ -18,8 +18,8 @@ use crate::{
 };
 
 pub mod access_flags;
-mod attribute;
-mod constant_pool;
+pub mod attribute;
+pub mod constant_pool;
 pub mod field;
 mod method;
 
@@ -82,5 +82,12 @@ impl ClassFile {
             methods,
             attributes,
         })
+    }
+
+    pub fn cp_item(&self, index: &CpIndex) -> Result<&CpInfo> {
+        self.constant_pool
+            .infos
+            .get(index.0 as usize)
+            .context(format!("no constant pool item at index {index:?}"))
     }
 }

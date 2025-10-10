@@ -51,6 +51,21 @@ impl Field {
 
         Ok(fields)
     }
+
+    pub fn is_static_final(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Static)
+            && self.access_flags.contains(&AccessFlag::Final)
+    }
+
+    pub fn get_constant_value_index(&self) -> Option<&CpIndex> {
+        self.attributes.iter().find_map(|attr| match attr {
+            Attribute::ConstantValue {
+                constant_value_index,
+                ..
+            } => Some(constant_value_index),
+            _ => None,
+        })
+    }
 }
 
 const ACC_PUBLIC: u16 = 0x0001;
