@@ -1,9 +1,10 @@
+use core::f32;
 use std::io::Read;
 
 use anyhow::{Context, Result, bail};
 use tracing::trace;
 
-use crate::util::{u1, u2, u4, u8, utf8};
+use crate::util::{f4, u1, u2, u4, u8, utf8, vec};
 
 /// A valid index into the constant pool.
 #[derive(Debug, Clone)]
@@ -92,6 +93,7 @@ impl ConstantPool {
 
 const UTF8_TAG: u8 = 1;
 const INTEGER_TAG: u8 = 3;
+const FLOAT_TAG: u8 = 4;
 const LONG_TAG: u8 = 5;
 const CLASS_TAG: u8 = 7;
 const STRING_TAG: u8 = 8;
@@ -108,6 +110,7 @@ pub enum CpInfo {
     Reserved,
     Utf8(String),
     Integer(u32),
+    Float(f32),
     Long(u64),
     Class {
         name_index: CpIndex,
@@ -154,6 +157,7 @@ impl CpInfo {
                 Ok(Self::Utf8(utf8(r, length.into())?))
             }
             INTEGER_TAG => Ok(Self::Integer(u4(r)?)),
+            FLOAT_TAG => Ok(Self::Float(f4(r)?)),
             LONG_TAG => Ok(Self::Long(u8(r)?)),
             CLASS_TAG => Ok(Self::Class {
                 name_index: u2(r)?.into(),
