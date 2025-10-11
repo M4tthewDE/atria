@@ -32,6 +32,7 @@ pub struct ClassFile {
     pub access_flags: HashSet<AccessFlag>,
     pub this_class: CpIndex,
     pub super_class: CpIndex,
+    pub interfaces: Vec<CpIndex>,
     pub fields: Vec<Field>,
     pub methods: Vec<Method>,
     pub attributes: Vec<Attribute>,
@@ -58,8 +59,9 @@ impl ClassFile {
         let super_class = u2(r)?.into();
 
         let interfaces_count = u2(r)?;
-        if interfaces_count != 0 {
-            bail!("todo: parse interfaces");
+        let mut interfaces = Vec::new();
+        for _ in 0..interfaces_count {
+            interfaces.push(u2(r)?.into());
         }
 
         let fields_count = u2(r)?;
@@ -78,6 +80,7 @@ impl ClassFile {
             access_flags,
             this_class,
             super_class,
+            interfaces,
             fields,
             methods,
             attributes,

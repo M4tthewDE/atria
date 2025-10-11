@@ -425,6 +425,7 @@ pub struct LocalVariableTableEntry {
 
 #[derive(Clone, Debug)]
 pub enum VerificationType {
+    Top,
     Integer,
     Object(CpIndex),
 }
@@ -434,6 +435,7 @@ impl VerificationType {
         let tag = u1(r)?;
 
         Ok(match tag {
+            0 => Self::Top,
             1 => Self::Integer,
             7 => Self::Object(u2(r)?.into()),
             _ => bail!("invalid verification type tag: {tag}"),
@@ -448,6 +450,9 @@ pub enum StackMapTableEntry {
         verification_type: VerificationType,
     },
     Chop {
+        offset_delta: u16,
+    },
+    Extended {
         offset_delta: u16,
     },
     Append {
@@ -472,6 +477,9 @@ impl StackMapTableEntry {
                 verification_type: VerificationType::new(r)?,
             },
             248..=250 => Self::Chop {
+                offset_delta: u2(r)?,
+            },
+            251 => Self::Extended {
                 offset_delta: u2(r)?,
             },
             252..=254 => {
