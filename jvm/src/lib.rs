@@ -1,7 +1,11 @@
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use parser::class::constant_pool::{CpIndex, CpInfo};
+use parser::class::{
+    ClassFile,
+    constant_pool::{CpIndex, CpInfo},
+    method::Method,
+};
 use tracing::debug;
 use zip::ZipArchive;
 
@@ -100,6 +104,7 @@ impl Jvm {
         for instruction in &code.instructions {
             match instruction {
                 Instruction::Ldc(index) => self.ldc(index, current_class)?,
+                Instruction::InvokeVirtual(index) => self.invoke_virtual(index, &current_class)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -107,7 +112,7 @@ impl Jvm {
         Ok(())
     }
 
-    fn ldc(&mut self, index: &CpIndex, current_class: &mut Class) -> Result<()> {
+    fn ldc(&mut self, index: &CpIndex, current_class: &Class) -> Result<()> {
         match current_class.class_file.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let name = current_class.class_file.constant_pool.utf8(name_index)?;
@@ -118,6 +123,47 @@ impl Jvm {
                     .push_operand(OperandValue::ClassReference(identifier))
             }
             info => bail!("item {info:?} at index {index:?} is not loadable"),
+        }
+    }
+
+    fn invoke_virtual(&mut self, index: &CpIndex, current_class: &Class) -> Result<()> {
+        if let CpInfo::MethodRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.class_file.cp_item(index)?
+        {
+            let class_name = current_class
+                .class_file
+                .constant_pool
+                .class_name(class_index)?;
+
+            let class_identifier = ClassIdentifier::from_path(class_name)?;
+            let class_file = self.class_loader.load(&class_identifier)?;
+            let (method_name, descriptor) = current_class
+                .class_file
+                .constant_pool
+                .name_and_type(name_and_type_index)?;
+
+            let method = self.resolve_method(&class_file, method_name, descriptor)?;
+
+            bail!("TODO: invoke_virtual")
+        } else {
+            bail!("no method reference at index {index:?}")
+        }
+    }
+
+    fn resolve_method<'a>(
+        &mut self,
+        class_file: &ClassFile,
+        name: &str,
+        descriptor: &str,
+    ) -> Result<Method> {
+        if let Ok(m) = class_file.method(name, descriptor) {
+            Ok(m.clone())
+        } else {
+            let super_class = ClassIdentifier::from_path(class_file.super_class()?)?;
+            let class_file = self.class_loader.load(&super_class)?;
+            self.resolve_method(&class_file, name, descriptor)
         }
     }
 }

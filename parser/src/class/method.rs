@@ -13,7 +13,7 @@ use crate::{
     util::u2,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Method {
     pub access_flags: HashSet<AccessFlag>,
     pub name_index: CpIndex,
@@ -53,6 +53,14 @@ impl Method {
             Attribute::Code { code, .. } => Some(code),
             _ => None,
         })
+    }
+
+    pub fn name<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
+        cp.utf8(&self.name_index)
+    }
+
+    pub fn descriptor<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
+        cp.utf8(&self.descriptor_index)
     }
 }
 

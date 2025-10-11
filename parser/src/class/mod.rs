@@ -21,7 +21,7 @@ pub mod access_flags;
 pub mod attribute;
 pub mod constant_pool;
 pub mod field;
-mod method;
+pub mod method;
 
 /// Representation of a class, interface or module
 #[derive(Clone)]
@@ -104,5 +104,25 @@ impl ClassFile {
         }
 
         None
+    }
+
+    pub fn method(&self, name: &str, descriptor: &str) -> Result<&Method> {
+        for method in &self.methods {
+            if method.name(&self.constant_pool)? != name {
+                continue;
+            }
+
+            if method.descriptor(&self.constant_pool)? != descriptor {
+                continue;
+            }
+
+            return Ok(method);
+        }
+
+        bail!("no method with name '{name}' and descriptor '{descriptor}' found")
+    }
+
+    pub fn super_class(&self) -> Result<&str> {
+        self.constant_pool.class_name(&self.super_class)
     }
 }

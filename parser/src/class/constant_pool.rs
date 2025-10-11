@@ -89,6 +89,21 @@ impl ConstantPool {
             bail!("no utf8 constant pool item found at index {index:?}")
         }
     }
+
+    pub fn name_and_type(&self, index: &CpIndex) -> Result<(&str, &str)> {
+        if let CpInfo::NameAndType {
+            name_index,
+            descriptor_index,
+        } = self
+            .infos
+            .get(index.0 as usize)
+            .context(format!("constant pool item at index {} not found", index.0))?
+        {
+            Ok((self.utf8(name_index)?, self.utf8(descriptor_index)?))
+        } else {
+            bail!("no name_and_type constant pool item found at index {index:?}")
+        }
+    }
 }
 
 const UTF8_TAG: u8 = 1;
