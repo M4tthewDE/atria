@@ -104,7 +104,7 @@ impl Jvm {
         for instruction in &code.instructions {
             match instruction {
                 Instruction::Ldc(index) => self.ldc(index, current_class)?,
-                Instruction::InvokeVirtual(index) => self.invoke_virtual(index, &current_class)?,
+                Instruction::InvokeVirtual(index) => self.invoke_virtual(index, current_class)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -152,13 +152,17 @@ impl Jvm {
         }
     }
 
-    fn resolve_method<'a>(
+    fn resolve_method(
         &mut self,
         class_file: &ClassFile,
         name: &str,
         descriptor: &str,
     ) -> Result<Method> {
         if let Ok(m) = class_file.method(name, descriptor) {
+            if class_file.is_method_signature_polymorphic(m)? {
+                bail!("TODO: method is signature polymorphic");
+            }
+
             Ok(m.clone())
         } else {
             let super_class = ClassIdentifier::from_path(class_file.super_class()?)?;

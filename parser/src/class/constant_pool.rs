@@ -4,7 +4,7 @@ use std::io::Read;
 use anyhow::{Context, Result, bail};
 use tracing::trace;
 
-use crate::util::{f4, u1, u2, u4, u8, utf8, vec};
+use crate::util::{f4, u1, u2, u4, u8, utf8};
 
 /// A valid index into the constant pool.
 #[derive(Debug, Clone)]

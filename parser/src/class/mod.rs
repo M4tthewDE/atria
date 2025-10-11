@@ -11,6 +11,7 @@ use crate::{
         access_flags::AccessFlag,
         attribute::Attribute,
         constant_pool::{ConstantPool, CpIndex, CpInfo},
+        descriptor::FieldType,
         field::Field,
         method::Method,
     },
@@ -20,6 +21,7 @@ use crate::{
 pub mod access_flags;
 pub mod attribute;
 pub mod constant_pool;
+pub mod descriptor;
 pub mod field;
 pub mod method;
 
@@ -100,7 +102,7 @@ impl ClassFile {
                 continue;
             }
 
-            if method.descriptor(&self.constant_pool)? != descriptor {
+            if method.raw_descriptor(&self.constant_pool)? != descriptor {
                 continue;
             }
 
@@ -113,5 +115,20 @@ impl ClassFile {
 
     pub fn super_class(&self) -> Result<&str> {
         self.constant_pool.class_name(&self.super_class)
+    }
+
+    pub fn is_method_signature_polymorphic(&self, method: &Method) -> Result<bool> {
+        let class_name = self.constant_pool.class_name(&self.this_class)?;
+
+        let correct_class = class_name == "java/lang/invoke/MethodHandle"
+            || class_name == "java/lang/invoke/VarHandle";
+
+        let descriptor = method.descriptor(&self.constant_pool)?;
+        let object_array_paramter = descriptor.parameters
+            == vec![FieldType::ComponentType(Box::new(FieldType::ObjectType {
+                class_name: "java/lang/Object".to_string(),
+            }))];
+
+        Ok(correct_class && object_array_paramter && method.is_varargs() && method.is_native())
     }
 }

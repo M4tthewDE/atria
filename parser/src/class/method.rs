@@ -9,6 +9,7 @@ use crate::{
     class::{
         attribute::Attribute,
         constant_pool::{ConstantPool, CpIndex},
+        descriptor::MethodDescriptor,
     },
     util::u2,
 };
@@ -59,8 +60,21 @@ impl Method {
         cp.utf8(&self.name_index)
     }
 
-    pub fn descriptor<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
+    pub fn raw_descriptor<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
         cp.utf8(&self.descriptor_index)
+    }
+
+    pub fn descriptor(&self, cp: &ConstantPool) -> Result<MethodDescriptor> {
+        let raw = cp.utf8(&self.descriptor_index)?;
+        MethodDescriptor::new(raw)
+    }
+
+    pub fn is_varargs(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Varargs)
+    }
+
+    pub fn is_native(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Native)
     }
 }
 
