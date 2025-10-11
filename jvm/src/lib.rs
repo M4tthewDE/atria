@@ -84,7 +84,7 @@ impl Jvm {
     }
 
     fn execute_clinit(&mut self, class: &mut Class) -> Result<()> {
-        if let Some(clinit_method) = class.class_file.clone().clinit() {
+        if let Ok(clinit_method) = class.class_file.method("<clinit>", "()V") {
             debug!("executing <clinit> for {}", class.identifier);
 
             self.stack.push("<clinit>".to_string());
