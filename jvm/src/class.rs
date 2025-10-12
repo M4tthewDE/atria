@@ -93,10 +93,12 @@ impl Class {
         self.class_file.super_class != 0
     }
 
-    pub fn super_class_name(&self) -> Result<&str> {
-        self.class_file
-            .constant_pool
-            .class_name(&self.class_file.super_class)
+    pub fn super_class(&self) -> Result<ClassIdentifier> {
+        ClassIdentifier::from_path(
+            self.class_file
+                .constant_pool
+                .class_name(&self.class_file.super_class)?,
+        )
     }
 
     pub fn method(&self, name: &str, descriptor: &str) -> Result<&Method> {

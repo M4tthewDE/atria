@@ -68,8 +68,7 @@ impl Jvm {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        let identifier = self.current_class.clone();
-        self.initialize(&identifier)?;
+        self.initialize(&self.current_class.clone())?;
         bail!("TODO: run")
     }
 
@@ -83,6 +82,7 @@ impl Jvm {
         let class_file = self.class_loader.load(identifier)?;
 
         debug!("initializing {identifier}");
+
         let mut class = Class::new(identifier.clone(), class_file);
         class.initializing();
         class.initialize_fields()?;
@@ -90,9 +90,8 @@ impl Jvm {
         self.classes.insert(identifier.clone(), class.clone());
 
         if class.has_super_class() {
-            let super_class_name = class.super_class_name()?;
-            let identifier = ClassIdentifier::from_path(super_class_name)?;
-            self.initialize(&identifier)?;
+            let super_class_identifier = class.super_class()?;
+            self.initialize(&super_class_identifier)?;
         }
 
         self.execute_clinit(&class)?;
@@ -246,7 +245,7 @@ impl Jvm {
 
             Ok(m.clone())
         } else {
-            let super_class = ClassIdentifier::from_path(class.super_class_name()?)?;
+            let super_class = class.super_class()?;
             let class = self.initialize(&super_class)?;
             self.resolve_method(&class, name, descriptor)
         }
