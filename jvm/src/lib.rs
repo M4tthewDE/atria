@@ -135,6 +135,7 @@ impl Jvm {
                 }
                 Instruction::InvokeVirtual(index) => self.invoke_virtual(&index)?,
                 Instruction::InvokeStatic(index) => self.invoke_static(&index)?,
+                Instruction::Iconst(val) => self.stack.push_operand(FrameValue::Int(val.into()))?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }

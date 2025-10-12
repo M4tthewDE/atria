@@ -12,7 +12,13 @@ impl Code {
         let mut i = 0;
         loop {
             let instruction = match bytes[i] {
+                0x2 => Instruction::Iconst(-1),
                 0x3 => Instruction::Iconst(0),
+                0x4 => Instruction::Iconst(1),
+                0x5 => Instruction::Iconst(2),
+                0x6 => Instruction::Iconst(3),
+                0x7 => Instruction::Iconst(4),
+                0x8 => Instruction::Iconst(5),
                 0x12 => Instruction::Ldc(bytes[i + 1].into()),
                 0xb1 => Instruction::Return,
                 0xb3 => {
@@ -46,7 +52,7 @@ impl Code {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
-    Iconst(u8),
+    Iconst(i8),
     Ldc(CpIndex),
     Return,
     PutStatic(CpIndex),

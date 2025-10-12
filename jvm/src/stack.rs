@@ -62,4 +62,5 @@ impl Frame {
 #[derive(Debug)]
 pub enum FrameValue {
     ClassReference(ClassIdentifier),
+    Int(i32),
 }
