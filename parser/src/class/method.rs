@@ -76,6 +76,10 @@ impl Method {
     pub fn is_native(&self) -> bool {
         self.access_flags.contains(&AccessFlag::Native)
     }
+
+    pub fn is_synchronized(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Synchronized)
+    }
 }
 
 const ACC_PUBLIC: u16 = 0x0001;

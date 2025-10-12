@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use parser::class::constant_pool::CpIndex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Code {
     pub instructions: Vec<Instruction>,
 }
@@ -40,7 +40,7 @@ impl Code {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Ldc(CpIndex),
     Return,

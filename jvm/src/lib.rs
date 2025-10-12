@@ -15,7 +15,7 @@ use crate::{
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
-    stack::{OperandValue, Stack},
+    stack::{FrameValue, Stack},
 };
 
 mod class;
@@ -27,10 +27,11 @@ mod stack;
 
 pub struct Jvm {
     class_loader: BootstrapClassLoader,
-    main_class: ClassIdentifier,
 
     classes: HashMap<ClassIdentifier, Class>,
     stack: Stack,
+    current_code: Option<Code>,
+    current_class: ClassIdentifier,
 }
 
 impl Jvm {
@@ -43,23 +44,43 @@ impl Jvm {
 
         Ok(Self {
             class_loader,
-            main_class,
             classes: HashMap::new(),
             stack: Stack::default(),
+            current_code: None,
+            current_class: main_class,
         })
     }
 
+    fn current_class_mut(&mut self) -> Result<&mut Class> {
+        self.classes.get_mut(&self.current_class).context(format!(
+            "current class {} is not initialized",
+            self.current_class
+        ))
+    }
+
+    fn current_class(&self) -> Result<Class> {
+        self.classes
+            .get(&self.current_class)
+            .context(format!(
+                "current class {} is not initialized",
+                self.current_class
+            ))
+            .cloned()
+    }
+
     pub fn run(&mut self) -> Result<()> {
-        let identifier = self.main_class.clone();
+        let identifier = self.current_class.clone();
 
         self.initialize(&identifier)?;
 
         bail!("TODO: run")
     }
 
-    fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<()> {
-        if self.classes.contains_key(identifier) {
-            return Ok(());
+    fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
+        if let Some(c) = self.classes.get(identifier)
+            && c.initialized
+        {
+            return Ok(c.clone());
         }
 
         let class_file = self.class_loader.load(identifier)?;
@@ -67,6 +88,8 @@ impl Jvm {
         debug!("initializing {identifier}");
         let mut class = Class::new(identifier.clone(), class_file);
         class.initialize_fields()?;
+
+        self.classes.insert(identifier.clone(), class.clone());
 
         if class.class_file.super_class != 0 {
             let name = class
@@ -77,34 +100,46 @@ impl Jvm {
             self.initialize(&identifier)?;
         }
 
-        self.execute_clinit(&mut class)?;
-        self.classes.insert(identifier.clone(), class);
+        self.execute_clinit(&class)?;
+        self.classes
+            .get_mut(identifier)
+            .context("class {identifier} not found")?
+            .initialized = true;
         debug!("initialized {identifier}");
-        Ok(())
+        Ok(class)
     }
 
-    fn execute_clinit(&mut self, class: &mut Class) -> Result<()> {
+    fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.class_file.method("<clinit>", "()V") {
             debug!("executing <clinit> for {}", class.identifier);
 
-            self.stack.push("<clinit>".to_string());
+            self.stack.push("<clinit>".to_string(), vec![]);
 
             let code_bytes = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             let code = Code::new(code_bytes)?;
             debug!("{:?}", &code);
-            self.execute(&code, class)?;
+            self.current_code = Some(code);
+            self.current_class = class.identifier.clone();
+            self.execute()?;
         }
 
         Ok(())
     }
 
-    fn execute(&mut self, code: &Code, current_class: &mut Class) -> Result<()> {
-        for instruction in &code.instructions {
+    fn execute(&mut self) -> Result<()> {
+        let instructions = self
+            .current_code
+            .clone()
+            .context("no code to run")?
+            .instructions;
+        for instruction in instructions {
             match instruction {
-                Instruction::Ldc(index) => self.ldc(index, current_class)?,
-                Instruction::InvokeVirtual(index) => self.invoke_virtual(index, current_class)?,
+                Instruction::Ldc(index) => {
+                    self.ldc(&index)?;
+                }
+                Instruction::InvokeVirtual(index) => self.invoke_virtual(&index)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -112,7 +147,8 @@ impl Jvm {
         Ok(())
     }
 
-    fn ldc(&mut self, index: &CpIndex, current_class: &Class) -> Result<()> {
+    fn ldc(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class_mut()?;
         match current_class.class_file.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let name = current_class.class_file.constant_pool.utf8(name_index)?;
@@ -120,13 +156,14 @@ impl Jvm {
                 self.class_loader.load(&identifier)?;
 
                 self.stack
-                    .push_operand(OperandValue::ClassReference(identifier))
+                    .push_operand(FrameValue::ClassReference(identifier))
             }
             info => bail!("item {info:?} at index {index:?} is not loadable"),
         }
     }
 
-    fn invoke_virtual(&mut self, index: &CpIndex, current_class: &Class) -> Result<()> {
+    fn invoke_virtual(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
         if let CpInfo::MethodRef {
             class_index,
             name_and_type_index,
@@ -138,15 +175,35 @@ impl Jvm {
                 .class_name(class_index)?;
 
             let class_identifier = ClassIdentifier::from_path(class_name)?;
-            let class_file = self.class_loader.load(&class_identifier)?;
+            let class = self.initialize(&class_identifier)?;
+
             let (method_name, descriptor) = current_class
                 .class_file
                 .constant_pool
                 .name_and_type(name_and_type_index)?;
+            let method = self.resolve_method(&class.class_file, method_name, descriptor)?;
 
-            let method = self.resolve_method(&class_file, method_name, descriptor)?;
+            if method.is_synchronized() {
+                bail!("TODO: invokevirtual synchronized method");
+            }
 
-            bail!("TODO: invoke_virtual")
+            if !method.is_native() {
+                let operands = self.stack.pop_operands(
+                    method
+                        .descriptor(&class.class_file.constant_pool)?
+                        .parameters
+                        .len()
+                        + 1,
+                )?;
+                let method_name = method.name(&class.class_file.constant_pool)?.to_string();
+                self.stack.push(method_name, operands);
+                let code = Code::new(method.code().context("method {method_name} has no code")?)?;
+                self.current_code = Some(code);
+                self.current_class = class.identifier.clone();
+                self.execute()
+            } else {
+                bail!("TODO: invokevirtual native method");
+            }
         } else {
             bail!("no method reference at index {index:?}")
         }

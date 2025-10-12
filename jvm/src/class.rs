@@ -15,6 +15,7 @@ pub struct Class {
     pub identifier: ClassIdentifier,
     fields: HashMap<String, FieldValue>,
     pub class_file: ClassFile,
+    pub initialized: bool,
 }
 
 impl Class {
@@ -23,6 +24,7 @@ impl Class {
             identifier,
             class_file,
             fields: HashMap::default(),
+            initialized: false,
         }
     }
 
@@ -50,19 +52,23 @@ impl Class {
     }
 
     fn resolve_constant_value(&self, constant_value_index: &CpIndex) -> Result<FieldValue> {
-        match self.class_file.cp_item(constant_value_index)? {
-            CpInfo::String { string_index } => Ok(FieldValue::String(
+        Ok(match self.class_file.cp_item(constant_value_index)? {
+            CpInfo::String { string_index } => FieldValue::String(
                 self.class_file
                     .constant_pool
                     .utf8(string_index)?
                     .to_string(),
-            )),
+            ),
+            CpInfo::Integer(val) => FieldValue::Integer(*val),
+            CpInfo::Long(val) => FieldValue::Long(*val),
             item => bail!("invalid constant pool item: {item:?}"),
-        }
+        })
     }
 }
 
 #[derive(Clone)]
 enum FieldValue {
     String(String),
+    Integer(u32),
+    Long(u64),
 }
