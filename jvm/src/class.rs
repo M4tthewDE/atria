@@ -16,6 +16,7 @@ pub struct Class {
     fields: HashMap<String, FieldValue>,
     pub class_file: ClassFile,
     pub initialized: bool,
+    pub being_initialized: bool,
 }
 
 impl Class {
@@ -25,6 +26,7 @@ impl Class {
             class_file,
             fields: HashMap::default(),
             initialized: false,
+            being_initialized: false,
         }
     }
 

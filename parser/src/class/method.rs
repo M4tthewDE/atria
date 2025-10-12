@@ -80,6 +80,14 @@ impl Method {
     pub fn is_synchronized(&self) -> bool {
         self.access_flags.contains(&AccessFlag::Synchronized)
     }
+
+    pub fn is_static(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Static)
+    }
+
+    pub fn is_abstract(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Abstract)
+    }
 }
 
 const ACC_PUBLIC: u16 = 0x0001;

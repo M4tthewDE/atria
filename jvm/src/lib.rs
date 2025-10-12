@@ -78,7 +78,7 @@ impl Jvm {
 
     fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
         if let Some(c) = self.classes.get(identifier)
-            && c.initialized
+            && (c.initialized || c.being_initialized)
         {
             return Ok(c.clone());
         }
@@ -87,6 +87,7 @@ impl Jvm {
 
         debug!("initializing {identifier}");
         let mut class = Class::new(identifier.clone(), class_file);
+        class.being_initialized = true;
         class.initialize_fields()?;
 
         self.classes.insert(identifier.clone(), class.clone());
@@ -140,6 +141,7 @@ impl Jvm {
                     self.ldc(&index)?;
                 }
                 Instruction::InvokeVirtual(index) => self.invoke_virtual(&index)?,
+                Instruction::InvokeStatic(index) => self.invoke_static(&index)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -207,6 +209,58 @@ impl Jvm {
         } else {
             bail!("no method reference at index {index:?}")
         }
+    }
+
+    fn invoke_static(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::MethodRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.class_file.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no method reference at index {index:?}")
+        };
+
+        let class_name = current_class
+            .class_file
+            .constant_pool
+            .class_name(class_index)?;
+        let class_identifier = ClassIdentifier::from_path(class_name)?;
+        let class = self.initialize(&class_identifier)?;
+        let (method_name, descriptor) = current_class
+            .class_file
+            .constant_pool
+            .name_and_type(name_and_type_index)?;
+
+        let method = self.resolve_method(&class.class_file, method_name, descriptor)?;
+
+        if !method.is_static() {
+            bail!("method has to be static");
+        }
+
+        if method.is_abstract() {
+            bail!("method cannot be static");
+        }
+
+        if method.is_synchronized() {
+            bail!("TODO: invokestatic synchronized method");
+        }
+
+        let descriptor = method.descriptor(&class.class_file.constant_pool)?;
+
+        if method.is_native() {
+            let operands = self.stack.pop_operands(descriptor.parameters.len())?;
+            self.run_native_method(method_name, operands)
+        } else {
+            bail!("TODO: invokestatic")
+        }
+    }
+
+    fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
+        debug!("running native method {name}");
+        Ok(())
     }
 
     fn resolve_method(
