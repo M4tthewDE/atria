@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use parser::class::{
-    ClassFile,
     constant_pool::{CpIndex, CpInfo},
     method::Method,
 };
@@ -70,15 +69,13 @@ impl Jvm {
 
     pub fn run(&mut self) -> Result<()> {
         let identifier = self.current_class.clone();
-
         self.initialize(&identifier)?;
-
         bail!("TODO: run")
     }
 
     fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
         if let Some(c) = self.classes.get(identifier)
-            && (c.initialized || c.being_initialized)
+            && (c.initialized() || c.being_initialized())
         {
             return Ok(c.clone());
         }
@@ -87,17 +84,14 @@ impl Jvm {
 
         debug!("initializing {identifier}");
         let mut class = Class::new(identifier.clone(), class_file);
-        class.being_initialized = true;
+        class.initializing();
         class.initialize_fields()?;
 
         self.classes.insert(identifier.clone(), class.clone());
 
-        if class.class_file.super_class != 0 {
-            let name = class
-                .class_file
-                .constant_pool
-                .class_name(&class.class_file.super_class)?;
-            let identifier = ClassIdentifier::from_path(name)?;
+        if class.has_super_class() {
+            let super_class_name = class.super_class_name()?;
+            let identifier = ClassIdentifier::from_path(super_class_name)?;
             self.initialize(&identifier)?;
         }
 
@@ -105,14 +99,14 @@ impl Jvm {
         self.classes
             .get_mut(identifier)
             .context("class {identifier} not found")?
-            .initialized = true;
+            .finished_initialization();
         debug!("initialized {identifier}");
         Ok(class)
     }
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
-        if let Ok(clinit_method) = class.class_file.method("<clinit>", "()V") {
-            debug!("executing <clinit> for {}", class.identifier);
+        if let Ok(clinit_method) = class.method("<clinit>", "()V") {
+            debug!("executing <clinit> for {}", class.identifier());
 
             self.stack.push("<clinit>".to_string(), vec![]);
 
@@ -122,7 +116,7 @@ impl Jvm {
             let code = Code::new(code_bytes)?;
             debug!("{:?}", &code);
             self.current_code = Some(code);
-            self.current_class = class.identifier.clone();
+            self.current_class = class.identifier().clone();
             self.execute()?;
         }
 
@@ -151,9 +145,9 @@ impl Jvm {
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
         let current_class = self.current_class_mut()?;
-        match current_class.class_file.cp_item(index)? {
+        match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
-                let name = current_class.class_file.constant_pool.utf8(name_index)?;
+                let name = current_class.utf8(name_index)?;
                 let identifier = ClassIdentifier::from_path(name)?;
                 self.class_loader.load(&identifier)?;
 
@@ -169,39 +163,26 @@ impl Jvm {
         if let CpInfo::MethodRef {
             class_index,
             name_and_type_index,
-        } = current_class.class_file.cp_item(index)?
+        } = current_class.cp_item(index)?
         {
-            let class_name = current_class
-                .class_file
-                .constant_pool
-                .class_name(class_index)?;
-
-            let class_identifier = ClassIdentifier::from_path(class_name)?;
+            let class_identifier = current_class.class_identifier(class_index)?;
             let class = self.initialize(&class_identifier)?;
 
-            let (method_name, descriptor) = current_class
-                .class_file
-                .constant_pool
-                .name_and_type(name_and_type_index)?;
-            let method = self.resolve_method(&class.class_file, method_name, descriptor)?;
+            let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+            let method = self.resolve_method(&class, method_name, descriptor)?;
 
             if method.is_synchronized() {
                 bail!("TODO: invokevirtual synchronized method");
             }
 
             if !method.is_native() {
-                let operands = self.stack.pop_operands(
-                    method
-                        .descriptor(&class.class_file.constant_pool)?
-                        .parameters
-                        .len()
-                        + 1,
-                )?;
-                let method_name = method.name(&class.class_file.constant_pool)?.to_string();
+                let descriptor = class.method_descriptor(&method)?;
+                let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
+                let method_name = class.method_name(&method)?.to_string();
                 self.stack.push(method_name, operands);
                 let code = Code::new(method.code().context("method {method_name} has no code")?)?;
                 self.current_code = Some(code);
-                self.current_class = class.identifier.clone();
+                self.current_class = class.identifier().clone();
                 self.execute()
             } else {
                 bail!("TODO: invokevirtual native method");
@@ -216,25 +197,18 @@ impl Jvm {
         let (class_index, name_and_type_index) = if let CpInfo::MethodRef {
             class_index,
             name_and_type_index,
-        } = current_class.class_file.cp_item(index)?
+        } = current_class.cp_item(index)?
         {
             (class_index, name_and_type_index)
         } else {
             bail!("no method reference at index {index:?}")
         };
 
-        let class_name = current_class
-            .class_file
-            .constant_pool
-            .class_name(class_index)?;
-        let class_identifier = ClassIdentifier::from_path(class_name)?;
+        let class_identifier = current_class.class_identifier(class_index)?;
         let class = self.initialize(&class_identifier)?;
-        let (method_name, descriptor) = current_class
-            .class_file
-            .constant_pool
-            .name_and_type(name_and_type_index)?;
+        let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
 
-        let method = self.resolve_method(&class.class_file, method_name, descriptor)?;
+        let method = self.resolve_method(&class, method_name, descriptor)?;
 
         if !method.is_static() {
             bail!("method has to be static");
@@ -248,7 +222,7 @@ impl Jvm {
             bail!("TODO: invokestatic synchronized method");
         }
 
-        let descriptor = method.descriptor(&class.class_file.constant_pool)?;
+        let descriptor = class.method_descriptor(&method)?;
 
         if method.is_native() {
             let operands = self.stack.pop_operands(descriptor.parameters.len())?;
@@ -260,25 +234,21 @@ impl Jvm {
 
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
         debug!("running native method {name}");
+        debug!("finished native method {name}");
         Ok(())
     }
 
-    fn resolve_method(
-        &mut self,
-        class_file: &ClassFile,
-        name: &str,
-        descriptor: &str,
-    ) -> Result<Method> {
-        if let Ok(m) = class_file.method(name, descriptor) {
-            if class_file.is_method_signature_polymorphic(m)? {
+    fn resolve_method(&mut self, class: &Class, name: &str, descriptor: &str) -> Result<Method> {
+        if let Ok(m) = class.method(name, descriptor) {
+            if class.is_method_signature_polymorphic(m)? {
                 bail!("TODO: method is signature polymorphic");
             }
 
             Ok(m.clone())
         } else {
-            let super_class = ClassIdentifier::from_path(class_file.super_class()?)?;
-            let class_file = self.class_loader.load(&super_class)?;
-            self.resolve_method(&class_file, name, descriptor)
+            let super_class = ClassIdentifier::from_path(class.super_class_name()?)?;
+            let class = self.initialize(&super_class)?;
+            self.resolve_method(&class, name, descriptor)
         }
     }
 }

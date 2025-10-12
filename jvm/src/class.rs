@@ -4,7 +4,9 @@ use anyhow::{Result, bail};
 use parser::class::{
     ClassFile,
     constant_pool::{CpIndex, CpInfo},
+    descriptor::MethodDescriptor,
     field::Field,
+    method::Method,
 };
 use tracing::trace;
 
@@ -12,11 +14,11 @@ use crate::ClassIdentifier;
 
 #[derive(Clone)]
 pub struct Class {
-    pub identifier: ClassIdentifier,
+    identifier: ClassIdentifier,
     fields: HashMap<String, FieldValue>,
-    pub class_file: ClassFile,
-    pub initialized: bool,
-    pub being_initialized: bool,
+    class_file: ClassFile,
+    initialized: bool,
+    being_initialized: bool,
 }
 
 impl Class {
@@ -65,6 +67,68 @@ impl Class {
             CpInfo::Long(val) => FieldValue::Long(*val),
             item => bail!("invalid constant pool item: {item:?}"),
         })
+    }
+
+    pub fn identifier(&self) -> &ClassIdentifier {
+        &self.identifier
+    }
+
+    pub fn initialized(&self) -> bool {
+        self.initialized
+    }
+
+    pub fn finished_initialization(&mut self) {
+        self.initialized = true
+    }
+
+    pub fn being_initialized(&self) -> bool {
+        self.being_initialized
+    }
+
+    pub fn initializing(&mut self) {
+        self.being_initialized = true;
+    }
+
+    pub fn has_super_class(&self) -> bool {
+        self.class_file.super_class != 0
+    }
+
+    pub fn super_class_name(&self) -> Result<&str> {
+        self.class_file
+            .constant_pool
+            .class_name(&self.class_file.super_class)
+    }
+
+    pub fn method(&self, name: &str, descriptor: &str) -> Result<&Method> {
+        self.class_file.method(name, descriptor)
+    }
+
+    pub fn cp_item(&self, index: &CpIndex) -> Result<&CpInfo> {
+        self.class_file.cp_item(index)
+    }
+
+    pub fn utf8(&self, index: &CpIndex) -> Result<&str> {
+        self.class_file.constant_pool.utf8(index)
+    }
+
+    pub fn class_identifier(&self, index: &CpIndex) -> Result<ClassIdentifier> {
+        ClassIdentifier::from_path(self.class_file.constant_pool.class_name(index)?)
+    }
+
+    pub fn name_and_type(&self, index: &CpIndex) -> Result<(&str, &str)> {
+        self.class_file.constant_pool.name_and_type(index)
+    }
+
+    pub fn is_method_signature_polymorphic(&self, method: &Method) -> Result<bool> {
+        self.class_file.is_method_signature_polymorphic(method)
+    }
+
+    pub fn method_descriptor(&self, method: &Method) -> Result<MethodDescriptor> {
+        MethodDescriptor::new(self.utf8(&method.descriptor_index)?)
+    }
+
+    pub fn method_name(&self, method: &Method) -> Result<&str> {
+        self.utf8(&method.name_index)
     }
 }
 
