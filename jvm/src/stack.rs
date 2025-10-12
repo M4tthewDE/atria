@@ -1,5 +1,5 @@
 use crate::ClassIdentifier;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use tracing::debug;
 
 #[derive(Debug, Default)]
@@ -21,6 +21,11 @@ impl Stack {
     pub fn pop_operands(&mut self, n: usize) -> Result<Vec<FrameValue>> {
         let frame = self.frames.last_mut().context("no frame found")?;
         frame.pop_operands(n)
+    }
+
+    pub fn pop_int(&mut self) -> Result<i32> {
+        let frame = self.frames.last_mut().context("no frame found")?;
+        frame.pop_int()
     }
 }
 
@@ -57,10 +62,26 @@ impl Frame {
 
         Ok(operands)
     }
+
+    pub fn pop_int(&mut self) -> Result<i32> {
+        if let Some(int) = self.operand_stack.pop() {
+            if let FrameValue::Int(val) = int {
+                return Ok(val);
+            }
+        }
+
+        bail!("no int found on top of operand stack")
+    }
 }
 
 #[derive(Debug)]
 pub enum FrameValue {
     ClassReference(ClassIdentifier),
+    ReferenceArray(ClassIdentifier, Vec<Reference>),
     Int(i32),
+}
+
+#[derive(Debug, Clone)]
+pub enum Reference {
+    Null,
 }

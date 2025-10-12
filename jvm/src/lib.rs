@@ -14,7 +14,7 @@ use crate::{
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
-    stack::{FrameValue, Stack},
+    stack::{FrameValue, Reference, Stack},
 };
 
 mod class;
@@ -136,6 +136,7 @@ impl Jvm {
                 Instruction::InvokeVirtual(index) => self.invoke_virtual(&index)?,
                 Instruction::InvokeStatic(index) => self.invoke_static(&index)?,
                 Instruction::Iconst(val) => self.stack.push_operand(FrameValue::Int(val.into()))?,
+                Instruction::Anewarray(index) => self.a_new_array(&index)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -230,6 +231,15 @@ impl Jvm {
         } else {
             bail!("TODO: invokestatic")
         }
+    }
+
+    fn a_new_array(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let array_class = current_class.class_identifier(index)?;
+        self.initialize(&array_class)?;
+        let length = self.stack.pop_int()?;
+        let array = FrameValue::ReferenceArray(array_class, vec![Reference::Null; length as usize]);
+        self.stack.push_operand(array)
     }
 
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
