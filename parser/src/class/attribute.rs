@@ -449,6 +449,10 @@ pub enum StackMapTableEntry {
     SameLocals1StackItem {
         verification_type: VerificationType,
     },
+    SameLocals1StackItemExtended {
+        offset_delta: u16,
+        stack: VerificationType,
+    },
     Chop {
         offset_delta: u16,
     },
@@ -475,6 +479,10 @@ impl StackMapTableEntry {
             0..=63 => Self::Same,
             64..=127 => Self::SameLocals1StackItem {
                 verification_type: VerificationType::new(r)?,
+            },
+            247 => Self::SameLocals1StackItemExtended {
+                offset_delta: u2(r)?,
+                stack: VerificationType::new(r)?,
             },
             248..=250 => Self::Chop {
                 offset_delta: u2(r)?,
