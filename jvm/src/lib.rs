@@ -30,7 +30,6 @@ pub struct Jvm {
 
     classes: HashMap<ClassIdentifier, Class>,
     stack: Stack,
-    current_code: Option<Code>,
     current_class: ClassIdentifier,
 }
 
@@ -46,7 +45,6 @@ impl Jvm {
             class_loader,
             classes: HashMap::new(),
             stack: Stack::default(),
-            current_code: None,
             current_class: main_class,
         })
     }
@@ -121,14 +119,13 @@ impl Jvm {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
             debug!("executing <clinit> for {}", class.identifier());
 
-            self.stack.push("<clinit>".to_string(), vec![]);
-
             let code_bytes = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             let code = Code::new(code_bytes)?;
             debug!("{:?}", &code);
-            self.current_code = Some(code);
+            self.stack.push("<clinit>".to_string(), vec![], code);
+
             self.current_class = class.identifier().clone();
             self.execute()?;
         }
@@ -137,12 +134,12 @@ impl Jvm {
     }
 
     fn execute(&mut self) -> Result<()> {
-        let instructions = self
-            .current_code
-            .clone()
-            .context("no code to run")?
-            .instructions;
-        for instruction in instructions {
+        loop {
+            if self.stack.done() {
+                return Ok(());
+            }
+
+            let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
             match instruction {
                 Instruction::Ldc(index) => {
@@ -156,8 +153,6 @@ impl Jvm {
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
-
-        Ok(())
     }
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
@@ -195,9 +190,8 @@ impl Jvm {
                 let descriptor = class.method_descriptor(&method)?;
                 let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
                 let method_name = class.method_name(&method)?.to_string();
-                self.stack.push(method_name, operands);
                 let code = Code::new(method.code().context("method {method_name} has no code")?)?;
-                self.current_code = Some(code);
+                self.stack.push(method_name, operands, code);
                 self.current_class = class.identifier().clone();
                 self.execute()
             } else {

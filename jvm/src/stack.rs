@@ -1,4 +1,7 @@
-use crate::ClassIdentifier;
+use crate::{
+    ClassIdentifier,
+    code::{Code, Instruction},
+};
 use anyhow::{Context, Result, bail};
 use tracing::debug;
 
@@ -8,8 +11,9 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn push(&mut self, method_name: String, local_variables: Vec<FrameValue>) {
-        self.frames.push(Frame::new(method_name, local_variables));
+    pub fn push(&mut self, method_name: String, local_variables: Vec<FrameValue>, code: Code) {
+        self.frames
+            .push(Frame::new(method_name, local_variables, code));
     }
 
     pub fn push_operand(&mut self, operand: FrameValue) -> Result<()> {
@@ -32,6 +36,15 @@ impl Stack {
         let frame = self.frames.last_mut().context("no frame found")?;
         frame.pop_int()
     }
+
+    pub fn current_instruction(&mut self) -> Result<Instruction> {
+        let frame = self.frames.last_mut().context("no frame found")?;
+        frame.current_instruction()
+    }
+
+    pub fn done(&self) -> bool {
+        self.frames.is_empty()
+    }
 }
 
 #[derive(Debug)]
@@ -39,14 +52,18 @@ struct Frame {
     method_name: String,
     operand_stack: Vec<FrameValue>,
     local_variables: Vec<FrameValue>,
+    code: Code,
+    pc: usize,
 }
 
 impl Frame {
-    fn new(method_name: String, local_variables: Vec<FrameValue>) -> Self {
+    fn new(method_name: String, local_variables: Vec<FrameValue>, code: Code) -> Self {
         Self {
             method_name,
             operand_stack: Vec::new(),
             local_variables,
+            code,
+            pc: 0,
         }
     }
 
@@ -80,6 +97,16 @@ impl Frame {
         }
 
         bail!("no int found on top of operand stack")
+    }
+
+    pub fn current_instruction(&mut self) -> Result<Instruction> {
+        let instruction = self
+            .code
+            .instructions
+            .get(self.pc)
+            .context(format!("no instruction found at pc {}", self.pc))?;
+        self.pc += 1;
+        Ok(instruction.clone())
     }
 }
 
