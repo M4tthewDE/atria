@@ -74,6 +74,13 @@ impl Jvm {
             .context(format!("class {identifier} is not initialized"))
     }
 
+    fn class(&self, identifier: &ClassIdentifier) -> Result<Class> {
+        self.classes
+            .get(identifier)
+            .context(format!("class {identifier} is not initialized"))
+            .cloned()
+    }
+
     pub fn run(&mut self) -> Result<()> {
         self.initialize(&self.current_class.clone())?;
         bail!("TODO: run")
@@ -176,10 +183,9 @@ impl Jvm {
         } = current_class.cp_item(index)?
         {
             let class_identifier = current_class.class_identifier(class_index)?;
-            let class = self.initialize(&class_identifier)?;
-
             let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-            let method = self.resolve_method(&class, method_name, descriptor)?;
+            let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+            let class = self.class(&class_identifier)?;
 
             if method.is_synchronized() {
                 bail!("TODO: invokevirtual synchronized method");
@@ -215,10 +221,10 @@ impl Jvm {
         };
 
         let class_identifier = current_class.class_identifier(class_index)?;
-        let class = self.initialize(&class_identifier)?;
         let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
 
-        let method = self.resolve_method(&class, method_name, descriptor)?;
+        let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+        let class = self.class(&class_identifier)?;
 
         if !method.is_static() {
             bail!("method has to be static");
@@ -278,7 +284,14 @@ impl Jvm {
         Ok(())
     }
 
-    fn resolve_method(&mut self, class: &Class, name: &str, descriptor: &str) -> Result<Method> {
+    fn resolve_method(
+        &mut self,
+        class: &ClassIdentifier,
+        name: &str,
+        descriptor: &str,
+    ) -> Result<Method> {
+        let class = self.initialize(class)?;
+
         if let Ok(m) = class.method(name, descriptor) {
             if class.is_method_signature_polymorphic(m)? {
                 bail!("TODO: method is signature polymorphic");
@@ -289,8 +302,7 @@ impl Jvm {
             let super_class = class
                 .super_class()
                 .context("method not found, maybe check interfaces?")?;
-            let class = self.initialize(&super_class)?;
-            self.resolve_method(&class, name, descriptor)
+            self.resolve_method(&super_class, name, descriptor)
         }
     }
 
