@@ -23,6 +23,11 @@ impl Stack {
         frame.pop_operands(n)
     }
 
+    pub fn pop_operand(&mut self) -> Result<FrameValue> {
+        let frame = self.frames.last_mut().context("no frame found")?;
+        frame.pop_operand()
+    }
+
     pub fn pop_int(&mut self) -> Result<i32> {
         let frame = self.frames.last_mut().context("no frame found")?;
         frame.pop_int()
@@ -63,11 +68,15 @@ impl Frame {
         Ok(operands)
     }
 
+    fn pop_operand(&mut self) -> Result<FrameValue> {
+        self.operand_stack
+            .pop()
+            .context("no operands in operand stack")
+    }
+
     pub fn pop_int(&mut self) -> Result<i32> {
-        if let Some(int) = self.operand_stack.pop() {
-            if let FrameValue::Int(val) = int {
-                return Ok(val);
-            }
+        if let Some(FrameValue::Int(val)) = self.operand_stack.pop() {
+            return Ok(val);
         }
 
         bail!("no int found on top of operand stack")

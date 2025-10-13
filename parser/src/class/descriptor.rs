@@ -1,6 +1,19 @@
 use anyhow::{Context, Result, bail};
 
 #[derive(Debug)]
+pub struct FieldDescriptor {
+    pub field_type: FieldType,
+}
+
+impl FieldDescriptor {
+    pub fn new(raw: &str) -> Result<Self> {
+        Ok(Self {
+            field_type: FieldType::new(raw)?,
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct MethodDescriptor {
     pub return_descriptor: ReturnDescriptor,
     pub parameters: Vec<FieldType>,

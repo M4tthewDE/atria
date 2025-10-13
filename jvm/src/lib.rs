@@ -3,13 +3,14 @@ use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 use anyhow::{Context, Result, bail};
 use parser::class::{
     constant_pool::{CpIndex, CpInfo},
+    field::Field,
     method::Method,
 };
 use tracing::debug;
 use zip::ZipArchive;
 
 use crate::{
-    class::Class,
+    class::{Class, FieldValue, ReferenceValue},
     code::{Code, Instruction},
     jar::Jar,
     jdk::Jdk,
@@ -65,6 +66,12 @@ impl Jvm {
                 self.current_class
             ))
             .cloned()
+    }
+
+    fn class_mut(&mut self, identifier: &ClassIdentifier) -> Result<&mut Class> {
+        self.classes
+            .get_mut(identifier)
+            .context(format!("class {identifier} is not initialized"))
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -129,6 +136,7 @@ impl Jvm {
             .context("no code to run")?
             .instructions;
         for instruction in instructions {
+            debug!("executing {instruction:?}");
             match instruction {
                 Instruction::Ldc(index) => {
                     self.ldc(&index)?;
@@ -137,6 +145,7 @@ impl Jvm {
                 Instruction::InvokeStatic(index) => self.invoke_static(&index)?,
                 Instruction::Iconst(val) => self.stack.push_operand(FrameValue::Int(val.into()))?,
                 Instruction::Anewarray(index) => self.a_new_array(&index)?,
+                Instruction::PutStatic(index) => self.put_static(&index)?,
                 _ => bail!("instruction {instruction:?} is not supported"),
             }
         }
@@ -242,6 +251,27 @@ impl Jvm {
         self.stack.push_operand(array)
     }
 
+    fn put_static(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no field reference at index {index:?}")
+        };
+
+        let class = current_class.class_identifier(class_index)?;
+        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+
+        self.resolve_field(&class, name, descriptor)?;
+        let value = self.stack.pop_operand()?;
+        let class = self.class_mut(&class)?;
+        class.set_field(name, value.into())
+    }
+
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
         debug!("running native method {name}");
         debug!("finished native method {name}");
@@ -256,9 +286,54 @@ impl Jvm {
 
             Ok(m.clone())
         } else {
-            let super_class = class.super_class()?;
+            let super_class = class
+                .super_class()
+                .context("method not found, maybe check interfaces?")?;
             let class = self.initialize(&super_class)?;
             self.resolve_method(&class, name, descriptor)
+        }
+    }
+
+    fn resolve_field(
+        &mut self,
+        class: &ClassIdentifier,
+        name: &str,
+        descriptor: &str,
+    ) -> Result<Field> {
+        let class = self.initialize(class)?;
+
+        if let Ok(f) = class.field(name, descriptor) {
+            Ok(f.clone())
+        } else {
+            let super_class = class
+                .super_class()
+                .context("field not found, maybe check interfaces?")?;
+            self.resolve_field(&super_class, name, descriptor)
+        }
+    }
+}
+
+impl From<FrameValue> for FieldValue {
+    fn from(value: FrameValue) -> Self {
+        match value {
+            FrameValue::ClassReference(class_identifier) => {
+                Self::Reference(ReferenceValue::Class(class_identifier))
+            }
+            FrameValue::ReferenceArray(class_identifier, references) => {
+                Self::Reference(ReferenceValue::Array(
+                    class_identifier,
+                    references.iter().map(|r| r.clone().into()).collect(),
+                ))
+            }
+            FrameValue::Int(val) => Self::Integer(val),
+        }
+    }
+}
+
+impl From<Reference> for FieldValue {
+    fn from(value: Reference) -> Self {
+        match value {
+            Reference::Null => Self::Reference(ReferenceValue::Null),
         }
     }
 }

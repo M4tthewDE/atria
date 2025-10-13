@@ -4,7 +4,7 @@ use std::io::Read;
 use anyhow::{Context, Result, bail};
 use tracing::trace;
 
-use crate::util::{f4, u1, u2, u4, u8, utf8};
+use crate::util::{f4, i4, u1, u2, u4, u8, utf8};
 
 /// A valid index into the constant pool.
 #[derive(Debug, Clone)]
@@ -124,7 +124,7 @@ const INVOKE_DYNAMIC_TAG: u8 = 18;
 pub enum CpInfo {
     Reserved,
     Utf8(String),
-    Integer(u32),
+    Integer(i32),
     Float(f32),
     Long(u64),
     Class {
@@ -171,7 +171,7 @@ impl CpInfo {
                 let length = u2(r)?;
                 Ok(Self::Utf8(utf8(r, length.into())?))
             }
-            INTEGER_TAG => Ok(Self::Integer(u4(r)?)),
+            INTEGER_TAG => Ok(Self::Integer(i4(r)?)),
             FLOAT_TAG => Ok(Self::Float(f4(r)?)),
             LONG_TAG => Ok(Self::Long(u8(r)?)),
             CLASS_TAG => Ok(Self::Class {

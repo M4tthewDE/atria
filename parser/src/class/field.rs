@@ -13,7 +13,7 @@ use crate::{
     util::u2,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Field {
     pub access_flags: HashSet<AccessFlag>,
     pub name_index: CpIndex,
@@ -65,6 +65,14 @@ impl Field {
             } => Some(constant_value_index),
             _ => None,
         })
+    }
+
+    pub fn name<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
+        cp.utf8(&self.name_index)
+    }
+
+    pub fn raw_descriptor<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {
+        cp.utf8(&self.descriptor_index)
     }
 }
 

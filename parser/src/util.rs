@@ -26,6 +26,12 @@ pub fn u8(r: &mut impl Read) -> Result<u64> {
     Ok(u64::from_be_bytes(buf))
 }
 
+pub fn i4(r: &mut impl Read) -> Result<i32> {
+    let mut buf = [0; 4];
+    r.read_exact(&mut buf)?;
+    Ok(i32::from_be_bytes(buf))
+}
+
 pub fn f4(r: &mut impl Read) -> Result<f32> {
     let mut buf = [0; 4];
     r.read_exact(&mut buf)?;

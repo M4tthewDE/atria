@@ -113,6 +113,23 @@ impl ClassFile {
         bail!("no method with name '{name}' and descriptor '{descriptor}' found")
     }
 
+    pub fn field(&self, name: &str, descriptor: &str) -> Result<&Field> {
+        for field in &self.fields {
+            if field.name(&self.constant_pool)? != name {
+                continue;
+            }
+
+            if field.raw_descriptor(&self.constant_pool)? != descriptor {
+                continue;
+            }
+
+            return Ok(field);
+        }
+
+        // TODO: this silently fails, return a Result with proper error types instead
+        bail!("no field with name '{name}' and descriptor '{descriptor}' found")
+    }
+
     pub fn super_class(&self) -> Result<&str> {
         self.constant_pool.class_name(&self.super_class)
     }

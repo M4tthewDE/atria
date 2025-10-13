@@ -4,11 +4,11 @@ use anyhow::{Result, bail};
 use parser::class::{
     ClassFile,
     constant_pool::{CpIndex, CpInfo},
-    descriptor::MethodDescriptor,
+    descriptor::{BaseType, FieldDescriptor, FieldType, MethodDescriptor},
     field::Field,
     method::Method,
 };
-use tracing::trace;
+use tracing::debug;
 
 use crate::ClassIdentifier;
 
@@ -43,15 +43,17 @@ impl Class {
     }
 
     fn initialize_static_final_field(&mut self, field: &Field) -> Result<()> {
-        let name = self.class_file.constant_pool.utf8(&field.name_index)?;
+        let name = self.utf8(&field.name_index)?;
 
-        trace!("initializing field {name}");
+        debug!("initializing field {name}");
 
-        if let Some(constant_value_index) = field.get_constant_value_index() {
-            let field_value = self.resolve_constant_value(constant_value_index)?;
-            self.fields.insert(name.to_string(), field_value);
-        }
+        let field_value = if let Some(constant_value_index) = field.get_constant_value_index() {
+            self.resolve_constant_value(constant_value_index)?
+        } else {
+            FieldDescriptor::new(self.utf8(&field.descriptor_index)?)?.into()
+        };
 
+        self.fields.insert(name.to_string(), field_value);
         Ok(())
     }
 
@@ -105,6 +107,10 @@ impl Class {
         self.class_file.method(name, descriptor)
     }
 
+    pub fn field(&self, name: &str, descriptor: &str) -> Result<&Field> {
+        self.class_file.field(name, descriptor)
+    }
+
     pub fn cp_item(&self, index: &CpIndex) -> Result<&CpInfo> {
         self.class_file.cp_item(index)
     }
@@ -132,11 +138,50 @@ impl Class {
     pub fn method_name(&self, method: &Method) -> Result<&str> {
         self.utf8(&method.name_index)
     }
+
+    pub fn set_field(&mut self, name: &str, value: FieldValue) -> Result<()> {
+        if !self.fields.contains_key(name) {
+            bail!("unable to set field, field {name} not found")
+        }
+
+        debug!("setting field {name} to value {value:?}");
+        self.fields.insert(name.to_string(), value);
+        Ok(())
+    }
 }
 
-#[derive(Clone)]
-enum FieldValue {
+#[derive(Clone, Debug)]
+pub enum FieldValue {
+    Reference(ReferenceValue),
     String(String),
-    Integer(u32),
+    Integer(i32),
     Long(u64),
+    Float(f32),
+    Double(f64),
+}
+
+impl From<FieldDescriptor> for FieldValue {
+    fn from(value: FieldDescriptor) -> Self {
+        match value.field_type {
+            FieldType::BaseType(base_type) => match base_type {
+                BaseType::Byte => Self::Integer(0),
+                BaseType::Char => Self::Integer(0),
+                BaseType::Double => Self::Double(0.0),
+                BaseType::Float => Self::Float(0.0),
+                BaseType::Int => Self::Integer(0),
+                BaseType::Long => Self::Long(0),
+                BaseType::Short => Self::Integer(0),
+                BaseType::Boolean => Self::Integer(0),
+            },
+            FieldType::ObjectType { .. } => Self::Reference(ReferenceValue::Null),
+            FieldType::ComponentType(..) => Self::Reference(ReferenceValue::Null),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ReferenceValue {
+    Null,
+    Class(ClassIdentifier),
+    Array(ClassIdentifier, Vec<FieldValue>),
 }
