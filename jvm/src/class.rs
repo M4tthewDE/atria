@@ -32,7 +32,13 @@ impl Class {
         }
     }
 
-    pub fn initialize_fields(&mut self) -> Result<()> {
+    pub fn set_class_field(&mut self, name: String, descriptor: &str) -> Result<()> {
+        self.fields
+            .insert(name, FieldDescriptor::new(descriptor)?.into());
+        Ok(())
+    }
+
+    pub fn initialize_static_fields(&mut self) -> Result<()> {
         for field in &self.class_file.fields.clone() {
             if field.is_static_final() {
                 self.initialize_static_final_field(field)?;
@@ -149,11 +155,15 @@ impl Class {
         Ok(())
     }
 
-    pub fn get_field(&self, name: &str) -> Result<FieldValue> {
+    pub fn get_field_value(&self, name: &str) -> Result<FieldValue> {
         self.fields
             .get(name)
             .context(format!("field {name} not found in {:?}", self.identifier))
             .cloned()
+    }
+
+    pub fn fields(&self) -> &Vec<Field> {
+        &self.class_file.fields
     }
 }
 
@@ -190,5 +200,5 @@ impl From<FieldDescriptor> for FieldValue {
 pub enum ReferenceValue {
     Null,
     Class(ClassIdentifier),
-    Array(ClassIdentifier, Vec<FieldValue>),
+    Array(ClassIdentifier, Vec<ReferenceValue>),
 }

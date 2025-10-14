@@ -35,6 +35,7 @@ impl Code {
                 0xb4 => Instruction::GetField(cp_index(bytes, i)),
                 0xb6 => Instruction::InvokeVirtual(cp_index(bytes, i)),
                 0xb8 => Instruction::InvokeStatic(cp_index(bytes, i)),
+                0xba => Instruction::InvokeDynamic(cp_index(bytes, i)),
                 0xbd => Instruction::Anewarray(cp_index(bytes, i)),
                 0xc6 => Instruction::IfNull(offset(bytes, i)),
                 op_code => bail!("unknown instruction: 0x{op_code:x}"),
@@ -73,6 +74,7 @@ pub enum Instruction {
     IfNull(i16),
     Goto(i16),
     Areturn,
+    InvokeDynamic(CpIndex),
 }
 
 impl Instruction {
@@ -91,6 +93,7 @@ impl Instruction {
             Self::IfNull(_) => 3,
             Self::Goto(_) => 3,
             Self::Areturn => 1,
+            Self::InvokeDynamic(_) => 5,
         }
     }
 }

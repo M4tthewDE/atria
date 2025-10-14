@@ -11,12 +11,12 @@ use tracing::{debug, instrument, trace};
 use zip::ZipArchive;
 
 use crate::{
-    class::{Class, FieldValue, ReferenceValue},
+    class::{Class, FieldValue},
     code::{Code, Instruction},
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
-    stack::{FrameValue, Reference, Stack},
+    stack::{FrameValue, ReferenceValue, Stack},
 };
 
 mod class;
@@ -83,6 +83,7 @@ impl Jvm {
     }
 
     pub fn run(&mut self) -> Result<()> {
+        self.initialize(&ClassIdentifier::new("java.lang.Class".to_string())?)?;
         let main_class = &self.main_class.clone();
         self.initialize(main_class)?;
         bail!("TODO: run")
@@ -101,7 +102,21 @@ impl Jvm {
 
         let mut class = Class::new(identifier.clone(), class_file);
         class.initializing();
-        class.initialize_fields()?;
+        class.initialize_static_fields()?;
+
+        let class_identifier = ClassIdentifier::new("java.lang.Class".to_string())?;
+        if identifier != &class_identifier {
+            let class_class = self.class(&class_identifier)?;
+            for field in class_class.fields() {
+                if field.is_static() {
+                    continue;
+                }
+
+                let name = class_class.utf8(&field.name_index)?;
+                let descriptor = class_class.utf8(&field.descriptor_index)?;
+                class.set_class_field(name.to_string(), descriptor)?;
+            }
+        }
 
         self.classes.insert(identifier.clone(), class.clone());
 
@@ -121,13 +136,10 @@ impl Jvm {
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
-            debug!("executing <clinit> for {:?}", class.identifier());
-
             let code_bytes = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             let code = Code::new(code_bytes)?;
-            debug!("{:?}", &code);
             self.stack.push(
                 "<clinit>".to_string(),
                 vec![],
@@ -143,6 +155,12 @@ impl Jvm {
 
     #[instrument(skip(self), fields(class = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
+        debug!(
+            "running {} in {:?}",
+            self.stack.method_name()?,
+            self.stack.current_class()?
+        );
+        debug!("{:?}", &self.stack.code()?);
         loop {
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
@@ -177,7 +195,7 @@ impl Jvm {
                 self.resolve_class(&identifier)?;
 
                 self.stack
-                    .push_operand(FrameValue::ClassReference(identifier))
+                    .push_operand(FrameValue::Reference(ReferenceValue::Class(identifier)))
             }
             info => bail!("item {info:?} at index {index:?} is not loadable"),
         }
@@ -260,7 +278,10 @@ impl Jvm {
         let array_class = current_class.class_identifier(index)?;
         self.initialize(&array_class)?;
         let length = self.stack.pop_int()?;
-        let array = FrameValue::ReferenceArray(array_class, vec![Reference::Null; length as usize]);
+        let array = FrameValue::Reference(ReferenceValue::Array(
+            array_class,
+            vec![ReferenceValue::Null; length as usize],
+        ));
         self.stack.push_operand(array)
     }
 
@@ -316,14 +337,14 @@ impl Jvm {
 
         self.resolve_field(&class_identifier, name, descriptor)?;
         let object_ref = self.stack.pop_operand()?;
-        if !object_ref.is_reference() || matches!(object_ref, FrameValue::ReferenceArray(_, _)) {
+        if !object_ref.is_reference() || object_ref.is_array() {
             bail!("objectref has to be a reference but no array, is {object_ref:?}");
         }
 
-        if let FrameValue::ClassReference(identifier) = object_ref {
+        if let FrameValue::Reference(ReferenceValue::Class(identifier)) = object_ref {
             let class = self.class(&identifier)?;
-            let field = class.get_field(name)?;
-            self.stack.push_operand(field.into())
+            let field_value = class.get_field_value(name)?;
+            self.stack.push_operand(field_value.into())
         } else {
             bail!("TODO: get_field for non class references")
         }
@@ -379,15 +400,18 @@ impl Jvm {
 impl From<FrameValue> for FieldValue {
     fn from(value: FrameValue) -> Self {
         match value {
-            FrameValue::ClassReference(class_identifier) => {
-                Self::Reference(ReferenceValue::Class(class_identifier))
-            }
-            FrameValue::ReferenceArray(class_identifier, references) => {
-                Self::Reference(ReferenceValue::Array(
-                    class_identifier,
-                    references.iter().map(|r| r.clone().into()).collect(),
-                ))
-            }
+            FrameValue::Reference(reference_value) => match reference_value {
+                ReferenceValue::Class(class_identifier) => {
+                    Self::Reference(class::ReferenceValue::Class(class_identifier))
+                }
+                ReferenceValue::Array(class_identifier, references) => {
+                    Self::Reference(class::ReferenceValue::Array(
+                        class_identifier,
+                        references.iter().map(|r| r.clone().into()).collect(),
+                    ))
+                }
+                ReferenceValue::Null => Self::Reference(class::ReferenceValue::Null),
+            },
             FrameValue::Int(val) => Self::Integer(val),
         }
     }
@@ -396,20 +420,66 @@ impl From<FrameValue> for FieldValue {
 impl From<FieldValue> for FrameValue {
     fn from(value: FieldValue) -> Self {
         match value {
-            FieldValue::Reference(_) => todo!(),
             FieldValue::String(_) => todo!(),
             FieldValue::Integer(_) => todo!(),
             FieldValue::Long(_) => todo!(),
             FieldValue::Float(_) => todo!(),
             FieldValue::Double(_) => todo!(),
+            FieldValue::Reference(reference_value) => match reference_value {
+                class::ReferenceValue::Null => Self::Reference(ReferenceValue::Null),
+                class::ReferenceValue::Class(class_identifier) => {
+                    Self::Reference(ReferenceValue::Class(class_identifier))
+                }
+                class::ReferenceValue::Array(class_identifier, references) => {
+                    Self::Reference(ReferenceValue::Array(
+                        class_identifier,
+                        references.iter().map(|r| r.clone().into()).collect(),
+                    ))
+                }
+            },
         }
     }
 }
 
-impl From<Reference> for FieldValue {
-    fn from(value: Reference) -> Self {
+impl From<ReferenceValue> for FieldValue {
+    fn from(value: ReferenceValue) -> Self {
         match value {
-            Reference::Null => Self::Reference(ReferenceValue::Null),
+            ReferenceValue::Null => Self::Reference(class::ReferenceValue::Null),
+            ReferenceValue::Class(class_identifier) => {
+                Self::Reference(class::ReferenceValue::Class(class_identifier))
+            }
+            ReferenceValue::Array(class_identifier, references) => {
+                Self::Reference(class::ReferenceValue::Array(
+                    class_identifier,
+                    references.iter().map(|r| r.clone().into()).collect(),
+                ))
+            }
+        }
+    }
+}
+
+impl From<class::ReferenceValue> for ReferenceValue {
+    fn from(value: class::ReferenceValue) -> Self {
+        match value {
+            class::ReferenceValue::Null => Self::Null,
+            class::ReferenceValue::Class(class_identifier) => Self::Class(class_identifier),
+            class::ReferenceValue::Array(class_identifier, references) => Self::Array(
+                class_identifier,
+                references.iter().map(|r| r.clone().into()).collect(),
+            ),
+        }
+    }
+}
+
+impl From<ReferenceValue> for class::ReferenceValue {
+    fn from(value: ReferenceValue) -> Self {
+        match value {
+            ReferenceValue::Class(class_identifier) => Self::Class(class_identifier),
+            ReferenceValue::Array(class_identifier, references) => Self::Array(
+                class_identifier,
+                references.iter().map(|r| r.clone().into()).collect(),
+            ),
+            ReferenceValue::Null => Self::Null,
         }
     }
 }

@@ -65,6 +65,14 @@ impl Stack {
         let frame = self.frames.last().context("no frame found")?;
         frame.local_variable(index)
     }
+
+    pub fn code(&self) -> Result<&Code> {
+        Ok(&self.frames.last().context("no frame found")?.code)
+    }
+
+    pub fn method_name(&self) -> Result<&str> {
+        Ok(&self.frames.last().context("no frame found")?.method_name)
+    }
 }
 
 #[derive(Debug)]
@@ -146,22 +154,26 @@ impl Frame {
 
 #[derive(Debug, Clone)]
 pub enum FrameValue {
-    ClassReference(ClassIdentifier),
-    ReferenceArray(ClassIdentifier, Vec<Reference>),
+    Reference(ReferenceValue),
     Int(i32),
 }
 
 impl FrameValue {
     pub fn is_reference(&self) -> bool {
         match self {
-            Self::ClassReference(_) => true,
-            Self::ReferenceArray(_, _) => true,
+            Self::Reference(_) => true,
             Self::Int(_) => false,
         }
+    }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self, FrameValue::Reference(ReferenceValue::Array(_, _)))
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Reference {
+pub enum ReferenceValue {
+    Class(ClassIdentifier),
+    Array(ClassIdentifier, Vec<ReferenceValue>),
     Null,
 }

@@ -57,6 +57,10 @@ impl Field {
             && self.access_flags.contains(&AccessFlag::Final)
     }
 
+    pub fn is_static(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Static)
+    }
+
     pub fn get_constant_value_index(&self) -> Option<&CpIndex> {
         self.attributes.iter().find_map(|attr| match attr {
             Attribute::ConstantValue {
