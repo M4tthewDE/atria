@@ -12,7 +12,7 @@ use zip::ZipArchive;
 
 use crate::{
     class::{Class, FieldValue},
-    code::{Code, Instruction},
+    instruction::Instruction,
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
@@ -20,7 +20,7 @@ use crate::{
 };
 
 mod class;
-mod code;
+mod instruction;
 mod jar;
 mod jdk;
 mod loader;
@@ -136,10 +136,10 @@ impl Jvm {
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
-            let code_bytes = clinit_method
+            let code = clinit_method
                 .code()
-                .context("no code found for <clinit> method")?;
-            let code = Code::new(code_bytes)?;
+                .context("no code found for <clinit> method")?
+                .to_vec();
             self.stack.push(
                 "<clinit>".to_string(),
                 vec![],
@@ -160,27 +160,31 @@ impl Jvm {
             self.stack.method_name()?,
             self.stack.current_class()?
         );
-        debug!("{:?}", &self.stack.code()?);
         loop {
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
             match instruction {
-                Instruction::Ldc(index) => {
-                    self.ldc(&index)?;
+                Instruction::Ldc(ref index) => {
+                    self.ldc(index)?;
                 }
-                Instruction::InvokeVirtual(index) => self.invoke_virtual(&index)?,
-                Instruction::InvokeStatic(index) => self.invoke_static(&index)?,
+                Instruction::InvokeVirtual(ref index) => self.invoke_virtual(index)?,
+                Instruction::InvokeStatic(ref index) => self.invoke_static(index)?,
                 Instruction::Iconst(val) => self.stack.push_operand(FrameValue::Int(val.into()))?,
-                Instruction::Anewarray(index) => self.a_new_array(&index)?,
-                Instruction::PutStatic(index) => self.put_static(&index)?,
+                Instruction::Anewarray(ref index) => self.a_new_array(index)?,
+                Instruction::PutStatic(ref index) => self.put_static(index)?,
                 Instruction::Return => {
                     self.stack.pop()?;
                     break;
                 }
                 Instruction::Aload(index) => self.aload(index)?,
-                Instruction::GetField(index) => self.get_field(&index)?,
+                Instruction::GetField(ref index) => self.get_field(index)?,
                 Instruction::Astore(index) => self.astore(index)?,
+                Instruction::IfNull(offset) => self.if_null(offset)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
+            }
+
+            if !matches!(instruction, Instruction::IfNull(_)) {
+                self.stack.offset_pc(instruction.length() as i16)?;
             }
         }
 
@@ -222,7 +226,10 @@ impl Jvm {
                 let descriptor = class.method_descriptor(&method)?;
                 let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
                 let method_name = class.method_name(&method)?.to_string();
-                let code = Code::new(method.code().context("method {method_name} has no code")?)?;
+                let code = method
+                    .code()
+                    .context("method {method_name} has no code")?
+                    .to_vec();
                 self.stack
                     .push(method_name, operands, code, class.identifier().clone());
                 self.execute()
@@ -358,6 +365,19 @@ impl Jvm {
         }
 
         self.stack.set_local_variable(index.into(), objectref)
+    }
+
+    fn if_null(&mut self, offset: i16) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        if !value.is_reference() {
+            bail!("ifnull value has to be reference, is {value:?}");
+        }
+
+        if value.is_null() {
+            self.stack.offset_pc(offset)
+        } else {
+            Ok(())
+        }
     }
 
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {

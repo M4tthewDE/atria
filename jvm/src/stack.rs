@@ -1,7 +1,4 @@
-use crate::{
-    ClassIdentifier, ReferenceValue,
-    code::{Code, Instruction},
-};
+use crate::{ClassIdentifier, ReferenceValue, instruction::Instruction};
 use anyhow::{Context, Result, bail};
 use tracing::trace;
 
@@ -15,7 +12,7 @@ impl Stack {
         &mut self,
         method_name: String,
         local_variables: Vec<FrameValue>,
-        code: Code,
+        code: Vec<u8>,
         class: ClassIdentifier,
     ) {
         self.frames
@@ -71,12 +68,15 @@ impl Stack {
         frame.set_local_variable(index, value)
     }
 
-    pub fn code(&self) -> Result<&Code> {
-        Ok(&self.frames.last().context("no frame found")?.code)
-    }
-
     pub fn method_name(&self) -> Result<&str> {
         Ok(&self.frames.last().context("no frame found")?.method_name)
+    }
+
+    pub fn offset_pc(&mut self, offset: i16) -> Result<()> {
+        self.frames
+            .last_mut()
+            .context("no frame found")?
+            .offset_pc(offset)
     }
 }
 
@@ -85,7 +85,7 @@ struct Frame {
     method_name: String,
     operand_stack: Vec<FrameValue>,
     local_variables: Vec<FrameValue>,
-    code: Code,
+    code: Vec<u8>,
     pc: usize,
     class: ClassIdentifier,
 }
@@ -94,7 +94,7 @@ impl Frame {
     fn new(
         method_name: String,
         local_variables: Vec<FrameValue>,
-        code: Code,
+        code: Vec<u8>,
         class: ClassIdentifier,
     ) -> Self {
         Self {
@@ -140,13 +140,8 @@ impl Frame {
     }
 
     fn current_instruction(&mut self) -> Result<Instruction> {
-        let instruction = self
-            .code
-            .instructions
-            .get(self.pc)
-            .context(format!("no instruction found at pc {}", self.pc))?;
-        self.pc += 1;
-        Ok(instruction.clone())
+        Instruction::new(&self.code[self.pc..])
+            .context(format!("no instruction found at pc {}", self.pc))
     }
 
     fn local_variable(&self, index: usize) -> Result<FrameValue> {
@@ -162,6 +157,21 @@ impl Frame {
         }
 
         self.local_variables.insert(index, value);
+        Ok(())
+    }
+
+    fn offset_pc(&mut self, offset: i16) -> Result<()> {
+        if offset < 0 {
+            let offset = offset.unsigned_abs() as usize;
+            if offset > self.pc {
+                bail!("pc cannot be negative")
+            }
+
+            self.pc -= offset;
+        } else {
+            self.pc += offset as usize;
+        }
+
         Ok(())
     }
 }
@@ -184,5 +194,9 @@ impl FrameValue {
 
     pub fn is_array(&self) -> bool {
         matches!(self, FrameValue::Reference(ReferenceValue::Array(_, _)))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, FrameValue::Reference(ReferenceValue::Null))
     }
 }
