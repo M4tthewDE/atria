@@ -159,6 +159,7 @@ impl Jvm {
                     self.stack.pop()?;
                     break;
                 }
+                Instruction::Aload(index) => self.aload(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
         }
@@ -281,6 +282,16 @@ impl Jvm {
         let value = self.stack.pop_operand()?;
         let class = self.class_mut(&class)?;
         class.set_field(name, value.into())
+    }
+
+    fn aload(&mut self, index: u8) -> Result<()> {
+        let local_variable = self.stack.local_variable(index.into())?;
+
+        if !local_variable.is_reference() {
+            bail!("local variable has to be a reference, is {local_variable:?}")
+        }
+
+        self.stack.push_operand(local_variable)
     }
 
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {

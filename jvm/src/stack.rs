@@ -60,6 +60,11 @@ impl Stack {
         let frame = self.frames.last().context("no frame found")?;
         Ok(frame.class.clone())
     }
+
+    pub fn local_variable(&self, index: usize) -> Result<FrameValue> {
+        let frame = self.frames.last().context("no frame found")?;
+        frame.local_variable(index)
+    }
 }
 
 #[derive(Debug)]
@@ -130,13 +135,30 @@ impl Frame {
         self.pc += 1;
         Ok(instruction.clone())
     }
+
+    pub fn local_variable(&self, index: usize) -> Result<FrameValue> {
+        self.local_variables
+            .get(index)
+            .context("no local variable at index {index}")
+            .cloned()
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FrameValue {
     ClassReference(ClassIdentifier),
     ReferenceArray(ClassIdentifier, Vec<Reference>),
     Int(i32),
+}
+
+impl FrameValue {
+    pub fn is_reference(&self) -> bool {
+        match self {
+            Self::ClassReference(_) => true,
+            Self::ReferenceArray(_, _) => true,
+            Self::Int(_) => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
