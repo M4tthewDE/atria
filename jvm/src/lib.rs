@@ -2,14 +2,16 @@ use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
+use parser::class::descriptor::FieldDescriptor;
 use parser::class::{
     constant_pool::{CpIndex, CpInfo},
     field::Field,
     method::Method,
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument};
 use zip::ZipArchive;
 
+use crate::heap::{Heap, ObjectId};
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,
@@ -20,6 +22,7 @@ use crate::{
 };
 
 mod class;
+mod heap;
 mod instruction;
 mod jar;
 mod jdk;
@@ -32,6 +35,7 @@ pub struct Jvm {
     classes: HashMap<ClassIdentifier, Class>,
     stack: Stack,
     main_class: ClassIdentifier,
+    heap: Heap,
 }
 
 impl Jvm {
@@ -47,6 +51,7 @@ impl Jvm {
             classes: HashMap::new(),
             stack: Stack::default(),
             main_class,
+            heap: Heap::default(),
         })
     }
 
@@ -96,9 +101,8 @@ impl Jvm {
             return Ok(c.clone());
         }
 
-        let class_file = self.class_loader.load(identifier)?;
-
         debug!("initializing {identifier:?}");
+        let class_file = self.class_loader.load(identifier)?;
 
         let mut class = Class::new(identifier.clone(), class_file);
         class.initializing();
@@ -180,6 +184,7 @@ impl Jvm {
                 Instruction::GetField(ref index) => self.get_field(index)?,
                 Instruction::Astore(index) => self.astore(index)?,
                 Instruction::IfNull(offset) => self.if_null(offset)?,
+                Instruction::New(ref index) => self.new_instruction(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -222,10 +227,11 @@ impl Jvm {
                 bail!("TODO: invokevirtual synchronized method");
             }
 
+            let descriptor = class.method_descriptor(&method)?;
+            let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
+            let method_name = class.method_name(&method)?.to_string();
+
             if !method.is_native() {
-                let descriptor = class.method_descriptor(&method)?;
-                let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
-                let method_name = class.method_name(&method)?.to_string();
                 let code = method
                     .code()
                     .context("method {method_name} has no code")?
@@ -233,8 +239,12 @@ impl Jvm {
                 self.stack
                     .push(method_name, operands, code, class.identifier().clone());
                 self.execute()
+            } else if let Some(return_value) =
+                self.run_native_method(&class, &method_name, operands)?
+            {
+                self.stack.push_operand(return_value)
             } else {
-                bail!("TODO: invokevirtual native method");
+                Ok(())
             }
         } else {
             bail!("no method reference at index {index:?}")
@@ -275,7 +285,11 @@ impl Jvm {
 
         if method.is_native() {
             let operands = self.stack.pop_operands(descriptor.parameters.len())?;
-            self.run_native_method(method_name, operands)
+            if let Some(return_value) = self.run_native_method(&class, method_name, operands)? {
+                self.stack.push_operand(return_value)
+            } else {
+                Ok(())
+            }
         } else {
             bail!("TODO: invokestatic")
         }
@@ -380,10 +394,79 @@ impl Jvm {
         }
     }
 
-    fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
-        trace!("running native method {name}");
-        trace!("finished native method {name}");
-        Ok(())
+    fn new_instruction(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+
+        let class_identifier = current_class.class_identifier(index)?;
+        let class = self.resolve_class(&class_identifier)?;
+        let fields = self.default_instance_fields(&class)?;
+        let object_id = self.heap.allocate(class.identifier().clone(), fields);
+        self.stack
+            .push_operand(FrameValue::Reference(ReferenceValue::Object(object_id)))
+    }
+
+    fn run_native_method(
+        &mut self,
+        class: &Class,
+        name: &str,
+        operands: Vec<FrameValue>,
+    ) -> Result<Option<FrameValue>> {
+        debug!(
+            "running native method '{name}' in {:?} with operands {:?}",
+            class.identifier(),
+            operands
+        );
+
+        if class.identifier() == &ClassIdentifier::new("java.lang.Class".to_string())?
+            && name == "initClassName"
+        {
+            if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
+                operands.first().context("no operands provided")?
+            {
+                let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
+                let class = self.resolve_class(&string_identifier)?;
+
+                let fields = self.default_instance_fields(&class)?;
+                let object_id = self.heap.allocate(class.identifier().clone(), fields);
+                bail!("TODO: set the value of the string!");
+                return Ok(Some(FrameValue::Reference(ReferenceValue::Object(
+                    object_id,
+                ))));
+            } else {
+                bail!("first operand has to be a reference")
+            }
+        }
+
+        debug!(
+            "finished native method '{name}' in {:?}",
+            class.identifier()
+        );
+
+        Ok(None)
+    }
+
+    fn default_instance_fields(&mut self, class: &Class) -> Result<HashMap<String, FieldValue>> {
+        let mut fields = HashMap::new();
+        for field in class.fields() {
+            if field.is_static() {
+                continue;
+            }
+
+            let field_name = class.utf8(&field.name_index)?;
+            let descriptor = class.utf8(&field.descriptor_index)?;
+            fields.insert(
+                field_name.to_string(),
+                FieldDescriptor::new(descriptor)?.into(),
+            );
+
+            if class.has_super_class() {
+                let super_class = self.initialize(&class.super_class()?)?;
+                let super_class_fields = self.default_instance_fields(&super_class)?;
+                fields.extend(super_class_fields.into_iter());
+            }
+        }
+
+        Ok(fields)
     }
 
     fn resolve_method(
@@ -533,6 +616,7 @@ impl Debug for ClassIdentifier {
 
 #[derive(Debug, Clone)]
 enum ReferenceValue {
+    Object(ObjectId),
     Class(ClassIdentifier),
     Array(ClassIdentifier, Vec<ReferenceValue>),
     Null,

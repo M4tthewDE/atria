@@ -27,6 +27,7 @@ const NEST_MEMBERS_ATTR_NAME: &str = "NestMembers";
 const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
 const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
 const METHOD_PARAMETERS_ATTR_NAME: &str = "MethodParameters";
+const NEST_HOST_ATTR_NAME: &str = "NestHost";
 
 #[derive(Clone, Debug)]
 pub enum Attribute {
@@ -107,6 +108,11 @@ pub enum Attribute {
         attribute_name_index: CpIndex,
         attribute_length: u32,
         parameters: Vec<MethodParameter>,
+    },
+    NestHost {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        host_class_index: CpIndex,
     },
 }
 
@@ -303,6 +309,12 @@ impl Attribute {
                     parameters,
                 }
             }
+            NEST_HOST_ATTR_NAME => Self::NestHost {
+                attribute_name_index,
+                attribute_length,
+                host_class_index: u2(r)?.into(),
+            },
+
             _ => bail!("unknown attribute {}", name),
         });
         trace!("parsed bytes: {}", r.stream_position()? - before);
@@ -427,6 +439,7 @@ pub struct LocalVariableTableEntry {
 pub enum VerificationType {
     Top,
     Integer,
+    Long,
     Object(CpIndex),
 }
 
@@ -437,6 +450,7 @@ impl VerificationType {
         Ok(match tag {
             0 => Self::Top,
             1 => Self::Integer,
+            4 => Self::Long,
             7 => Self::Object(u2(r)?.into()),
             _ => bail!("invalid verification type tag: {tag}"),
         })

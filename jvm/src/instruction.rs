@@ -25,6 +25,7 @@ pub enum Instruction {
     Goto(i16),
     Areturn,
     InvokeDynamic(CpIndex),
+    New(CpIndex),
 }
 
 impl Instruction {
@@ -54,6 +55,7 @@ impl Instruction {
             0xb6 => Instruction::InvokeVirtual(cp_index(bytes)),
             0xb8 => Instruction::InvokeStatic(cp_index(bytes)),
             0xba => Instruction::InvokeDynamic(cp_index(bytes)),
+            0xbb => Instruction::New(cp_index(bytes)),
             0xbd => Instruction::Anewarray(cp_index(bytes)),
             0xc6 => Instruction::IfNull(offset(bytes)),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
@@ -76,6 +78,7 @@ impl Instruction {
             Self::Goto(_) => 3,
             Self::Areturn => 1,
             Self::InvokeDynamic(_) => 5,
+            Self::New(_) => 3,
         }
     }
 }
