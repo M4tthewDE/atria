@@ -185,6 +185,7 @@ impl Jvm {
                 Instruction::Astore(index) => self.astore(index)?,
                 Instruction::IfNull(offset) => self.if_null(offset)?,
                 Instruction::New(ref index) => self.new_instruction(index)?,
+                Instruction::Dup => self.dup()?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -403,6 +404,12 @@ impl Jvm {
         let object_id = self.heap.allocate(class.identifier().clone(), fields);
         self.stack
             .push_operand(FrameValue::Reference(ReferenceValue::Object(object_id)))
+    }
+
+    fn dup(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        self.stack.push_operand(operand.clone())?;
+        self.stack.push_operand(operand)
     }
 
     fn run_native_method(

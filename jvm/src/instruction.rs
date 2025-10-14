@@ -26,6 +26,7 @@ pub enum Instruction {
     Areturn,
     InvokeDynamic(CpIndex),
     New(CpIndex),
+    Dup,
 }
 
 impl Instruction {
@@ -47,6 +48,7 @@ impl Instruction {
             0x4c => Instruction::Astore(1),
             0x4d => Instruction::Astore(2),
             0x4e => Instruction::Astore(3),
+            0x59 => Instruction::Dup,
             0xa7 => Instruction::Goto(offset(bytes)),
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
@@ -79,6 +81,7 @@ impl Instruction {
             Self::Areturn => 1,
             Self::InvokeDynamic(_) => 5,
             Self::New(_) => 3,
+            Self::Dup => 1,
         }
     }
 }
