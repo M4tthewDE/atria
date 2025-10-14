@@ -72,13 +72,13 @@ impl Jvm {
     fn class_mut(&mut self, identifier: &ClassIdentifier) -> Result<&mut Class> {
         self.classes
             .get_mut(identifier)
-            .context(format!("class {identifier} is not initialized"))
+            .context(format!("class {identifier:?} is not initialized"))
     }
 
     fn class(&self, identifier: &ClassIdentifier) -> Result<Class> {
         self.classes
             .get(identifier)
-            .context(format!("class {identifier} is not initialized"))
+            .context(format!("class {identifier:?} is not initialized"))
             .cloned()
     }
 
@@ -160,6 +160,7 @@ impl Jvm {
                     break;
                 }
                 Instruction::Aload(index) => self.aload(index)?,
+                Instruction::GetField(index) => self.get_field(&index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
         }
@@ -173,7 +174,7 @@ impl Jvm {
             CpInfo::Class { name_index } => {
                 let name = current_class.utf8(name_index)?;
                 let identifier = ClassIdentifier::from_path(name)?;
-                self.class_loader.load(&identifier)?;
+                self.resolve_class(&identifier)?;
 
                 self.stack
                     .push_operand(FrameValue::ClassReference(identifier))
@@ -294,6 +295,40 @@ impl Jvm {
         self.stack.push_operand(local_variable)
     }
 
+    fn resolve_class(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
+        self.initialize(identifier)
+    }
+
+    fn get_field(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no field reference at index {index:?}")
+        };
+
+        let class_identifier = current_class.class_identifier(class_index)?;
+        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+
+        self.resolve_field(&class_identifier, name, descriptor)?;
+        let object_ref = self.stack.pop_operand()?;
+        if !object_ref.is_reference() || matches!(object_ref, FrameValue::ReferenceArray(_, _)) {
+            bail!("objectref has to be a reference but no array, is {object_ref:?}");
+        }
+
+        if let FrameValue::ClassReference(identifier) = object_ref {
+            let class = self.class(&identifier)?;
+            let field = class.get_field(name)?;
+            self.stack.push_operand(field.into())
+        } else {
+            bail!("TODO: get_field for non class references")
+        }
+    }
+
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
         trace!("running native method {name}");
         trace!("finished native method {name}");
@@ -354,6 +389,19 @@ impl From<FrameValue> for FieldValue {
                 ))
             }
             FrameValue::Int(val) => Self::Integer(val),
+        }
+    }
+}
+
+impl From<FieldValue> for FrameValue {
+    fn from(value: FieldValue) -> Self {
+        match value {
+            FieldValue::Reference(_) => todo!(),
+            FieldValue::String(_) => todo!(),
+            FieldValue::Integer(_) => todo!(),
+            FieldValue::Long(_) => todo!(),
+            FieldValue::Float(_) => todo!(),
+            FieldValue::Double(_) => todo!(),
         }
     }
 }

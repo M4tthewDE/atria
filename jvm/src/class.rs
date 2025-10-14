@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use parser::class::{
     ClassFile,
     constant_pool::{CpIndex, CpInfo},
@@ -147,6 +147,13 @@ impl Class {
         trace!("setting field {name} to value {value:?}");
         self.fields.insert(name.to_string(), value);
         Ok(())
+    }
+
+    pub fn get_field(&self, name: &str) -> Result<FieldValue> {
+        self.fields
+            .get(name)
+            .context(format!("field {name} not found in {:?}", self.identifier))
+            .cloned()
     }
 }
 
