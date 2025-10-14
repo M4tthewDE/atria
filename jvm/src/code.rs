@@ -20,10 +20,27 @@ impl Code {
                 0x7 => Instruction::Iconst(4),
                 0x8 => Instruction::Iconst(5),
                 0x12 => Instruction::Ldc(bytes[i + 1].into()),
+                0x2a => Instruction::Aload(0),
+                0x2b => Instruction::Aload(1),
+                0x2c => Instruction::Aload(2),
+                0x2d => Instruction::Aload(3),
+                0x4b => Instruction::Astore(0),
+                0x4c => Instruction::Astore(1),
+                0x4d => Instruction::Astore(2),
+                0x4e => Instruction::Astore(3),
+                0xa7 => {
+                    let offset = (bytes[i + 1] as i16) << 8 | bytes[i + 2] as i16;
+                    Instruction::Goto(offset)
+                }
+                0xb0 => Instruction::Areturn,
                 0xb1 => Instruction::Return,
                 0xb3 => {
                     let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
                     Instruction::PutStatic(index.into())
+                }
+                0xb4 => {
+                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
+                    Instruction::GetField(index.into())
                 }
                 0xb6 => {
                     let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
@@ -36,6 +53,10 @@ impl Code {
                 0xbd => {
                     let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
                     Instruction::Anewarray(index.into())
+                }
+                0xc6 => {
+                    let offset = (bytes[i + 1] as i16) << 8 | bytes[i + 2] as i16;
+                    Instruction::IfNull(offset)
                 }
                 op_code => bail!("unknown instruction: 0x{op_code:x}"),
             };
@@ -59,18 +80,30 @@ pub enum Instruction {
     InvokeVirtual(CpIndex),
     InvokeStatic(CpIndex),
     Anewarray(CpIndex),
+    Aload(u8),
+    GetField(CpIndex),
+    Astore(u8),
+    IfNull(i16),
+    Goto(i16),
+    Areturn,
 }
 
 impl Instruction {
     fn length(&self) -> usize {
         match self {
-            Instruction::Iconst(_) => 1,
-            Instruction::Ldc(_) => 2,
-            Instruction::Return => 1,
-            Instruction::PutStatic(_) => 3,
-            Instruction::InvokeVirtual(_) => 3,
-            Instruction::InvokeStatic(_) => 3,
-            Instruction::Anewarray(_) => 3,
+            Self::Iconst(_) => 1,
+            Self::Ldc(_) => 2,
+            Self::Return => 1,
+            Self::PutStatic(_) => 3,
+            Self::InvokeVirtual(_) => 3,
+            Self::InvokeStatic(_) => 3,
+            Self::Anewarray(_) => 3,
+            Self::Aload(_) => 1,
+            Self::GetField(_) => 3,
+            Self::Astore(_) => 1,
+            Self::IfNull(_) => 3,
+            Self::Goto(_) => 3,
+            Self::Areturn => 1,
         }
     }
 }

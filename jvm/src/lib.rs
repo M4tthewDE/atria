@@ -159,6 +159,7 @@ impl Jvm {
                     self.stack.pop()?;
                     break;
                 }
+                _ => bail!("instruction {instruction:?} is not implemented"),
             }
         }
 
