@@ -28,36 +28,15 @@ impl Code {
                 0x4c => Instruction::Astore(1),
                 0x4d => Instruction::Astore(2),
                 0x4e => Instruction::Astore(3),
-                0xa7 => {
-                    let offset = (bytes[i + 1] as i16) << 8 | bytes[i + 2] as i16;
-                    Instruction::Goto(offset)
-                }
+                0xa7 => Instruction::Goto(offset(bytes, i)),
                 0xb0 => Instruction::Areturn,
                 0xb1 => Instruction::Return,
-                0xb3 => {
-                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
-                    Instruction::PutStatic(index.into())
-                }
-                0xb4 => {
-                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
-                    Instruction::GetField(index.into())
-                }
-                0xb6 => {
-                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
-                    Instruction::InvokeVirtual(index.into())
-                }
-                0xb8 => {
-                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
-                    Instruction::InvokeStatic(index.into())
-                }
-                0xbd => {
-                    let index = (bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16;
-                    Instruction::Anewarray(index.into())
-                }
-                0xc6 => {
-                    let offset = (bytes[i + 1] as i16) << 8 | bytes[i + 2] as i16;
-                    Instruction::IfNull(offset)
-                }
+                0xb3 => Instruction::PutStatic(cp_index(bytes, i)),
+                0xb4 => Instruction::GetField(cp_index(bytes, i)),
+                0xb6 => Instruction::InvokeVirtual(cp_index(bytes, i)),
+                0xb8 => Instruction::InvokeStatic(cp_index(bytes, i)),
+                0xbd => Instruction::Anewarray(cp_index(bytes, i)),
+                0xc6 => Instruction::IfNull(offset(bytes, i)),
                 op_code => bail!("unknown instruction: 0x{op_code:x}"),
             };
 
@@ -69,6 +48,14 @@ impl Code {
             }
         }
     }
+}
+
+fn cp_index(bytes: &[u8], i: usize) -> CpIndex {
+    ((bytes[i + 1] as u16) << 8 | bytes[i + 2] as u16).into()
+}
+
+fn offset(bytes: &[u8], i: usize) -> i16 {
+    (bytes[i + 1] as i16) << 8 | bytes[i + 2] as i16
 }
 
 #[derive(Debug, Clone)]
