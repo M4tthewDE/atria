@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -6,7 +7,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::debug;
+use tracing::{debug, instrument, trace};
 use zip::ZipArchive;
 
 use crate::{
@@ -30,7 +31,7 @@ pub struct Jvm {
 
     classes: HashMap<ClassIdentifier, Class>,
     stack: Stack,
-    current_class: ClassIdentifier,
+    main_class: ClassIdentifier,
 }
 
 impl Jvm {
@@ -45,23 +46,25 @@ impl Jvm {
             class_loader,
             classes: HashMap::new(),
             stack: Stack::default(),
-            current_class: main_class,
+            main_class,
         })
     }
 
     fn current_class_mut(&mut self) -> Result<&mut Class> {
-        self.classes.get_mut(&self.current_class).context(format!(
+        let current_class = self.stack.current_class()?;
+        self.classes.get_mut(&current_class).context(format!(
             "current class {} is not initialized",
-            self.current_class
+            current_class
         ))
     }
 
     fn current_class(&self) -> Result<Class> {
+        let current_class = self.stack.current_class()?;
         self.classes
-            .get(&self.current_class)
+            .get(&current_class)
             .context(format!(
                 "current class {} is not initialized",
-                self.current_class
+                current_class
             ))
             .cloned()
     }
@@ -80,7 +83,8 @@ impl Jvm {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        self.initialize(&self.current_class.clone())?;
+        let main_class = &self.main_class.clone();
+        self.initialize(main_class)?;
         bail!("TODO: run")
     }
 
@@ -93,7 +97,7 @@ impl Jvm {
 
         let class_file = self.class_loader.load(identifier)?;
 
-        debug!("initializing {identifier}");
+        debug!("initializing {identifier:?}");
 
         let mut class = Class::new(identifier.clone(), class_file);
         class.initializing();
@@ -111,34 +115,35 @@ impl Jvm {
             .get_mut(identifier)
             .context("class {identifier} not found")?
             .finished_initialization();
-        debug!("initialized {identifier}");
+        debug!("initialized {identifier:?}");
         Ok(class)
     }
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
-            debug!("executing <clinit> for {}", class.identifier());
+            debug!("executing <clinit> for {:?}", class.identifier());
 
             let code_bytes = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             let code = Code::new(code_bytes)?;
             debug!("{:?}", &code);
-            self.stack.push("<clinit>".to_string(), vec![], code);
-
-            self.current_class = class.identifier().clone();
+            self.stack.push(
+                "<clinit>".to_string(),
+                vec![],
+                code,
+                class.identifier().clone(),
+            );
             self.execute()?;
+            debug!("executed <clinit> for {:?}", class.identifier());
         }
 
         Ok(())
     }
 
+    #[instrument(skip(self), fields(class = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
         loop {
-            if self.stack.done() {
-                return Ok(());
-            }
-
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
             match instruction {
@@ -150,9 +155,14 @@ impl Jvm {
                 Instruction::Iconst(val) => self.stack.push_operand(FrameValue::Int(val.into()))?,
                 Instruction::Anewarray(index) => self.a_new_array(&index)?,
                 Instruction::PutStatic(index) => self.put_static(&index)?,
-                _ => bail!("instruction {instruction:?} is not supported"),
+                Instruction::Return => {
+                    self.stack.pop()?;
+                    break;
+                }
             }
         }
+
+        Ok(())
     }
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
@@ -191,8 +201,8 @@ impl Jvm {
                 let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
                 let method_name = class.method_name(&method)?.to_string();
                 let code = Code::new(method.code().context("method {method_name} has no code")?)?;
-                self.stack.push(method_name, operands, code);
-                self.current_class = class.identifier().clone();
+                self.stack
+                    .push(method_name, operands, code, class.identifier().clone());
                 self.execute()
             } else {
                 bail!("TODO: invokevirtual native method");
@@ -273,8 +283,8 @@ impl Jvm {
     }
 
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
-        debug!("running native method {name}");
-        debug!("finished native method {name}");
+        trace!("running native method {name}");
+        trace!("finished native method {name}");
         Ok(())
     }
 
@@ -345,7 +355,7 @@ impl From<Reference> for FieldValue {
 }
 
 /// Identifies a class using package and name
-#[derive(Clone, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 struct ClassIdentifier {
     package: String,
     name: String,
@@ -409,6 +419,18 @@ impl ClassIdentifier {
 
 impl Display for ClassIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for package in self.package.split('.') {
+            write!(f, "{}.", package.chars().next().unwrap_or_default())?;
+        }
+
+        write!(f, "{}", self.name)?;
+
+        Ok(())
+    }
+}
+
+impl Debug for ClassIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.package, self.name)
     }
 }
@@ -424,7 +446,7 @@ mod tests {
     #[test]
     fn system() -> Result<()> {
         tracing_subscriber::registry()
-            .with(fmt::layer())
+            .with(fmt::layer().with_file(true).with_line_number(true))
             .with(EnvFilter::from_default_env())
             .init();
 

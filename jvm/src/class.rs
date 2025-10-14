@@ -8,7 +8,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::debug;
+use tracing::trace;
 
 use crate::ClassIdentifier;
 
@@ -45,7 +45,7 @@ impl Class {
     fn initialize_static_final_field(&mut self, field: &Field) -> Result<()> {
         let name = self.utf8(&field.name_index)?;
 
-        debug!("initializing field {name}");
+        trace!("initializing field {name}");
 
         let field_value = if let Some(constant_value_index) = field.get_constant_value_index() {
             self.resolve_constant_value(constant_value_index)?
@@ -144,7 +144,7 @@ impl Class {
             bail!("unable to set field, field {name} not found")
         }
 
-        debug!("setting field {name} to value {value:?}");
+        trace!("setting field {name} to value {value:?}");
         self.fields.insert(name.to_string(), value);
         Ok(())
     }

@@ -3,7 +3,7 @@ use crate::{
     code::{Code, Instruction},
 };
 use anyhow::{Context, Result, bail};
-use tracing::debug;
+use tracing::trace;
 
 #[derive(Debug, Default)]
 pub struct Stack {
@@ -11,9 +11,23 @@ pub struct Stack {
 }
 
 impl Stack {
-    pub fn push(&mut self, method_name: String, local_variables: Vec<FrameValue>, code: Code) {
+    pub fn push(
+        &mut self,
+        method_name: String,
+        local_variables: Vec<FrameValue>,
+        code: Code,
+        class: ClassIdentifier,
+    ) {
         self.frames
-            .push(Frame::new(method_name, local_variables, code));
+            .push(Frame::new(method_name, local_variables, code, class));
+    }
+
+    pub fn pop(&mut self) -> Result<()> {
+        if self.frames.pop().is_some() {
+            Ok(())
+        } else {
+            bail!("nothing to pop, stack is empty")
+        }
     }
 
     pub fn push_operand(&mut self, operand: FrameValue) -> Result<()> {
@@ -42,8 +56,9 @@ impl Stack {
         frame.current_instruction()
     }
 
-    pub fn done(&self) -> bool {
-        self.frames.is_empty()
+    pub fn current_class(&self) -> Result<ClassIdentifier> {
+        let frame = self.frames.last().context("no frame found")?;
+        Ok(frame.class.clone())
     }
 }
 
@@ -54,21 +69,28 @@ struct Frame {
     local_variables: Vec<FrameValue>,
     code: Code,
     pc: usize,
+    class: ClassIdentifier,
 }
 
 impl Frame {
-    fn new(method_name: String, local_variables: Vec<FrameValue>, code: Code) -> Self {
+    fn new(
+        method_name: String,
+        local_variables: Vec<FrameValue>,
+        code: Code,
+        class: ClassIdentifier,
+    ) -> Self {
         Self {
             method_name,
             operand_stack: Vec::new(),
             local_variables,
             code,
             pc: 0,
+            class,
         }
     }
 
     fn push_operand(&mut self, operand: FrameValue) {
-        debug!("pushing operand: {operand:?}");
+        trace!("pushing operand: {operand:?}");
         self.operand_stack.push(operand);
     }
 

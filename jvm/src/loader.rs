@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::Cursor};
 use crate::ClassIdentifier;
 use anyhow::{Context, Result, bail};
 use parser::class::{ClassFile, access_flags::AccessFlag};
-use tracing::debug;
+use tracing::trace;
 
 pub trait ReadClass {
     fn read_class(&mut self, identifier: &ClassIdentifier) -> Result<Vec<u8>>;
@@ -27,7 +27,7 @@ impl BootstrapClassLoader {
             return Ok(cf.clone());
         }
 
-        debug!("loading {identifier}");
+        trace!("loading {identifier}");
 
         for source in &mut self.sources {
             let class_bytes = match source.read_class(identifier) {
@@ -51,7 +51,7 @@ impl BootstrapClassLoader {
 
             self.class_files
                 .insert(identifier.clone(), class_file.clone());
-            debug!("loaded {identifier}");
+            trace!("loaded {identifier}");
             return Ok(class_file);
         }
 
