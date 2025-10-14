@@ -10,7 +10,7 @@ use parser::class::{
 };
 use tracing::trace;
 
-use crate::ClassIdentifier;
+use crate::{ClassIdentifier, ReferenceValue};
 
 #[derive(Clone)]
 pub struct Class {
@@ -194,11 +194,4 @@ impl From<FieldDescriptor> for FieldValue {
             FieldType::ComponentType(..) => Self::Reference(ReferenceValue::Null),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum ReferenceValue {
-    Null,
-    Class(ClassIdentifier),
-    Array(ClassIdentifier, Vec<ReferenceValue>),
 }

@@ -1,5 +1,5 @@
 use crate::{
-    ClassIdentifier,
+    ClassIdentifier, ReferenceValue,
     code::{Code, Instruction},
 };
 use anyhow::{Context, Result, bail};
@@ -169,11 +169,4 @@ impl FrameValue {
     pub fn is_array(&self) -> bool {
         matches!(self, FrameValue::Reference(ReferenceValue::Array(_, _)))
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum ReferenceValue {
-    Class(ClassIdentifier),
-    Array(ClassIdentifier, Vec<ReferenceValue>),
-    Null,
 }

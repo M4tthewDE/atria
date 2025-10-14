@@ -16,7 +16,7 @@ use crate::{
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
-    stack::{FrameValue, ReferenceValue, Stack},
+    stack::{FrameValue, Stack},
 };
 
 mod class;
@@ -400,18 +400,7 @@ impl Jvm {
 impl From<FrameValue> for FieldValue {
     fn from(value: FrameValue) -> Self {
         match value {
-            FrameValue::Reference(reference_value) => match reference_value {
-                ReferenceValue::Class(class_identifier) => {
-                    Self::Reference(class::ReferenceValue::Class(class_identifier))
-                }
-                ReferenceValue::Array(class_identifier, references) => {
-                    Self::Reference(class::ReferenceValue::Array(
-                        class_identifier,
-                        references.iter().map(|r| r.clone().into()).collect(),
-                    ))
-                }
-                ReferenceValue::Null => Self::Reference(class::ReferenceValue::Null),
-            },
+            FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
         }
     }
@@ -420,66 +409,12 @@ impl From<FrameValue> for FieldValue {
 impl From<FieldValue> for FrameValue {
     fn from(value: FieldValue) -> Self {
         match value {
+            FieldValue::Reference(reference_value) => Self::Reference(reference_value),
             FieldValue::String(_) => todo!(),
             FieldValue::Integer(_) => todo!(),
             FieldValue::Long(_) => todo!(),
             FieldValue::Float(_) => todo!(),
             FieldValue::Double(_) => todo!(),
-            FieldValue::Reference(reference_value) => match reference_value {
-                class::ReferenceValue::Null => Self::Reference(ReferenceValue::Null),
-                class::ReferenceValue::Class(class_identifier) => {
-                    Self::Reference(ReferenceValue::Class(class_identifier))
-                }
-                class::ReferenceValue::Array(class_identifier, references) => {
-                    Self::Reference(ReferenceValue::Array(
-                        class_identifier,
-                        references.iter().map(|r| r.clone().into()).collect(),
-                    ))
-                }
-            },
-        }
-    }
-}
-
-impl From<ReferenceValue> for FieldValue {
-    fn from(value: ReferenceValue) -> Self {
-        match value {
-            ReferenceValue::Null => Self::Reference(class::ReferenceValue::Null),
-            ReferenceValue::Class(class_identifier) => {
-                Self::Reference(class::ReferenceValue::Class(class_identifier))
-            }
-            ReferenceValue::Array(class_identifier, references) => {
-                Self::Reference(class::ReferenceValue::Array(
-                    class_identifier,
-                    references.iter().map(|r| r.clone().into()).collect(),
-                ))
-            }
-        }
-    }
-}
-
-impl From<class::ReferenceValue> for ReferenceValue {
-    fn from(value: class::ReferenceValue) -> Self {
-        match value {
-            class::ReferenceValue::Null => Self::Null,
-            class::ReferenceValue::Class(class_identifier) => Self::Class(class_identifier),
-            class::ReferenceValue::Array(class_identifier, references) => Self::Array(
-                class_identifier,
-                references.iter().map(|r| r.clone().into()).collect(),
-            ),
-        }
-    }
-}
-
-impl From<ReferenceValue> for class::ReferenceValue {
-    fn from(value: ReferenceValue) -> Self {
-        match value {
-            ReferenceValue::Class(class_identifier) => Self::Class(class_identifier),
-            ReferenceValue::Array(class_identifier, references) => Self::Array(
-                class_identifier,
-                references.iter().map(|r| r.clone().into()).collect(),
-            ),
-            ReferenceValue::Null => Self::Null,
         }
     }
 }
@@ -563,6 +498,13 @@ impl Debug for ClassIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.package, self.name)
     }
+}
+
+#[derive(Debug, Clone)]
+enum ReferenceValue {
+    Class(ClassIdentifier),
+    Array(ClassIdentifier, Vec<ReferenceValue>),
+    Null,
 }
 
 #[cfg(test)]
