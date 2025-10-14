@@ -179,6 +179,7 @@ impl Jvm {
                 }
                 Instruction::Aload(index) => self.aload(index)?,
                 Instruction::GetField(index) => self.get_field(&index)?,
+                Instruction::Astore(index) => self.astore(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
         }
@@ -350,6 +351,15 @@ impl Jvm {
         }
     }
 
+    fn astore(&mut self, index: u8) -> Result<()> {
+        let objectref = self.stack.pop_operand()?;
+        if !objectref.is_reference() && !objectref.is_return_address() {
+            bail!("TODO: astore objectref has to be reference or return address")
+        }
+
+        self.stack.set_local_variable(index.into(), objectref)
+    }
+
     fn run_native_method(&self, name: &str, _operands: Vec<FrameValue>) -> Result<()> {
         trace!("running native method {name}");
         trace!("finished native method {name}");
@@ -402,6 +412,7 @@ impl From<FrameValue> for FieldValue {
         match value {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
+            FrameValue::ReturnAddress => todo!(),
         }
     }
 }

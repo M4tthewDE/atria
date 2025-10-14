@@ -66,6 +66,11 @@ impl Stack {
         frame.local_variable(index)
     }
 
+    pub fn set_local_variable(&mut self, index: usize, value: FrameValue) -> Result<()> {
+        let frame = self.frames.last_mut().context("no frame found")?;
+        frame.set_local_variable(index, value)
+    }
+
     pub fn code(&self) -> Result<&Code> {
         Ok(&self.frames.last().context("no frame found")?.code)
     }
@@ -126,7 +131,7 @@ impl Frame {
             .context("no operands in operand stack")
     }
 
-    pub fn pop_int(&mut self) -> Result<i32> {
+    fn pop_int(&mut self) -> Result<i32> {
         if let Some(FrameValue::Int(val)) = self.operand_stack.pop() {
             return Ok(val);
         }
@@ -134,7 +139,7 @@ impl Frame {
         bail!("no int found on top of operand stack")
     }
 
-    pub fn current_instruction(&mut self) -> Result<Instruction> {
+    fn current_instruction(&mut self) -> Result<Instruction> {
         let instruction = self
             .code
             .instructions
@@ -144,26 +149,37 @@ impl Frame {
         Ok(instruction.clone())
     }
 
-    pub fn local_variable(&self, index: usize) -> Result<FrameValue> {
+    fn local_variable(&self, index: usize) -> Result<FrameValue> {
         self.local_variables
             .get(index)
             .context("no local variable at index {index}")
             .cloned()
     }
+
+    fn set_local_variable(&mut self, index: usize, value: FrameValue) -> Result<()> {
+        if index > self.local_variables.len() {
+            bail!("index out of bounds of local variables")
+        }
+
+        self.local_variables.insert(index, value);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum FrameValue {
+    ReturnAddress,
     Reference(ReferenceValue),
     Int(i32),
 }
 
 impl FrameValue {
     pub fn is_reference(&self) -> bool {
-        match self {
-            Self::Reference(_) => true,
-            Self::Int(_) => false,
-        }
+        matches!(self, Self::Reference(_))
+    }
+
+    pub fn is_return_address(&self) -> bool {
+        matches!(self, FrameValue::ReturnAddress)
     }
 
     pub fn is_array(&self) -> bool {
