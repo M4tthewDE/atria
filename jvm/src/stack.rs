@@ -203,7 +203,6 @@ pub enum FrameValue {
     ReturnAddress,
     Reference(ReferenceValue),
     Int(i32),
-    Boolean(bool),
 }
 
 impl FrameValue {

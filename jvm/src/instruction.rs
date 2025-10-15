@@ -30,6 +30,7 @@ pub enum Instruction {
     InvokeSpecial(CpIndex),
     IfNonNull(i16),
     Ireturn,
+    IfNe(i16),
 }
 
 impl Instruction {
@@ -52,6 +53,7 @@ impl Instruction {
             0x4d => Instruction::Astore(2),
             0x4e => Instruction::Astore(3),
             0x59 => Instruction::Dup,
+            0x9a => Instruction::IfNe(offset(bytes)),
             0xa7 => Instruction::Goto(offset(bytes)),
             0xac => Instruction::Ireturn,
             0xb0 => Instruction::Areturn,
@@ -91,6 +93,7 @@ impl Instruction {
             Self::InvokeSpecial(_) => 3,
             Self::IfNonNull(_) => 3,
             Self::Ireturn => 1,
+            Self::IfNe(_) => 3,
         }
     }
 }

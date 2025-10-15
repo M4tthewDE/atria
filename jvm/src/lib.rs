@@ -2,9 +2,7 @@ use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use parser::class::descriptor::{
-    BaseType, FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor,
-};
+use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
     constant_pool::{CpIndex, CpInfo},
     field::Field,
@@ -199,36 +197,39 @@ impl Jvm {
                     self.ireturn()?;
                     break;
                 }
+                Instruction::IfNe(offset) => self.if_ne(offset)?,
+
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
-            if !matches!(instruction, Instruction::IfNull(_)) {
-                self.stack.offset_pc(instruction.length() as i16)?;
+            match instruction {
+                Instruction::IfNull(_) | Instruction::IfNe(_) | Instruction::IfNonNull(_) => {}
+                _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
 
         Ok(())
     }
 
+    fn if_ne(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if let FrameValue::Int(val) = operand {
+            if val == 0 {
+                self.stack.offset_pc(offset)
+            } else {
+                self.stack.offset_pc(3)
+            }
+        } else {
+            bail!("ifne operand has to be int, is {operand:?}")
+        }
+    }
+
     fn ireturn(&mut self) -> Result<()> {
         let operand = self.stack.pop_operand()?;
 
-        if let FrameValue::Int(value) = operand {
-            let val = match self.stack.method_descriptor()?.return_descriptor {
-                ReturnDescriptor::Void => {
-                    bail!("method has to return type compatible with int, is void")
-                }
-                ReturnDescriptor::FieldType(field_type) => match field_type {
-                    FieldType::BaseType(base_type) => match base_type {
-                        BaseType::Int => todo!(),
-                        BaseType::Boolean => FrameValue::Boolean(value != 0),
-                        b => bail!("method has to return type compatible with int, is {b:?}"),
-                    },
-                    f => bail!("method has to return type compatible with int, is {f:?}"),
-                },
-            };
+        if matches!(operand, FrameValue::Int(_)) {
             self.stack.pop()?;
-            self.stack.push_operand(val)
+            self.stack.push_operand(operand)
         } else {
             bail!("ireturn can only return int, is {operand:?}")
         }
@@ -433,7 +434,7 @@ impl Jvm {
         if value.is_null() {
             self.stack.offset_pc(offset)
         } else {
-            Ok(())
+            self.stack.offset_pc(3)
         }
     }
 
@@ -446,7 +447,7 @@ impl Jvm {
         if !value.is_null() {
             self.stack.offset_pc(offset)
         } else {
-            Ok(())
+            self.stack.offset_pc(3)
         }
     }
 
@@ -696,7 +697,6 @@ impl From<FrameValue> for FieldValue {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
             FrameValue::ReturnAddress => todo!(),
-            FrameValue::Boolean(val) => Self::Integer(val.into()),
         }
     }
 }
