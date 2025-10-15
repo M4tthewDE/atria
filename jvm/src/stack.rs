@@ -1,5 +1,6 @@
 use crate::{ClassIdentifier, ReferenceValue, instruction::Instruction};
 use anyhow::{Context, Result, bail};
+use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
 
 #[derive(Debug, Default)]
@@ -11,12 +12,18 @@ impl Stack {
     pub fn push(
         &mut self,
         method_name: String,
+        method_descriptor: MethodDescriptor,
         local_variables: Vec<FrameValue>,
         code: Vec<u8>,
         class: ClassIdentifier,
     ) {
-        self.frames
-            .push(Frame::new(method_name, local_variables, code, class));
+        self.frames.push(Frame::new(
+            method_name,
+            method_descriptor,
+            local_variables,
+            code,
+            class,
+        ));
     }
 
     pub fn pop(&mut self) -> Result<()> {
@@ -78,11 +85,20 @@ impl Stack {
             .context("no frame found")?
             .offset_pc(offset)
     }
+
+    pub fn method_descriptor(&self) -> Result<MethodDescriptor> {
+        Ok(self
+            .frames
+            .last()
+            .context("no frame found")?
+            .method_descriptor())
+    }
 }
 
 #[derive(Debug)]
 struct Frame {
     method_name: String,
+    method_descriptor: MethodDescriptor,
     operand_stack: Vec<FrameValue>,
     local_variables: Vec<FrameValue>,
     code: Vec<u8>,
@@ -93,12 +109,14 @@ struct Frame {
 impl Frame {
     fn new(
         method_name: String,
+        method_descriptor: MethodDescriptor,
         local_variables: Vec<FrameValue>,
         code: Vec<u8>,
         class: ClassIdentifier,
     ) -> Self {
         Self {
             method_name,
+            method_descriptor,
             operand_stack: Vec::new(),
             local_variables,
             code,
@@ -174,6 +192,10 @@ impl Frame {
 
         Ok(())
     }
+
+    fn method_descriptor(&self) -> MethodDescriptor {
+        self.method_descriptor.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +203,7 @@ pub enum FrameValue {
     ReturnAddress,
     Reference(ReferenceValue),
     Int(i32),
+    Boolean(bool),
 }
 
 impl FrameValue {

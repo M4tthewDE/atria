@@ -28,6 +28,8 @@ pub enum Instruction {
     New(CpIndex),
     Dup,
     InvokeSpecial(CpIndex),
+    IfNonNull(i16),
+    Ireturn,
 }
 
 impl Instruction {
@@ -51,6 +53,7 @@ impl Instruction {
             0x4e => Instruction::Astore(3),
             0x59 => Instruction::Dup,
             0xa7 => Instruction::Goto(offset(bytes)),
+            0xac => Instruction::Ireturn,
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
             0xb3 => Instruction::PutStatic(cp_index(bytes)),
@@ -62,6 +65,7 @@ impl Instruction {
             0xbb => Instruction::New(cp_index(bytes)),
             0xbd => Instruction::Anewarray(cp_index(bytes)),
             0xc6 => Instruction::IfNull(offset(bytes)),
+            0xc7 => Instruction::IfNonNull(offset(bytes)),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
         })
     }
@@ -85,6 +89,8 @@ impl Instruction {
             Self::New(_) => 3,
             Self::Dup => 1,
             Self::InvokeSpecial(_) => 3,
+            Self::IfNonNull(_) => 3,
+            Self::Ireturn => 1,
         }
     }
 }

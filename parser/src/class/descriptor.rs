@@ -13,7 +13,7 @@ impl FieldDescriptor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MethodDescriptor {
     pub return_descriptor: ReturnDescriptor,
     pub parameters: Vec<FieldType>,
@@ -59,20 +59,20 @@ impl MethodDescriptor {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ReturnDescriptor {
     Void,
     FieldType(FieldType),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum FieldType {
     BaseType(BaseType),
     ObjectType { class_name: String },
     ComponentType(Box<FieldType>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BaseType {
     Byte,
     Char,

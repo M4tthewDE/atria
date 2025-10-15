@@ -2,7 +2,9 @@ use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use parser::class::descriptor::FieldDescriptor;
+use parser::class::descriptor::{
+    BaseType, FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor,
+};
 use parser::class::{
     constant_pool::{CpIndex, CpInfo},
     field::Field,
@@ -140,12 +142,14 @@ impl Jvm {
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
+            let descriptor = class.method_descriptor(clinit_method)?;
             let code = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?
                 .to_vec();
             self.stack.push(
                 "<clinit>".to_string(),
+                descriptor,
                 vec![],
                 code,
                 class.identifier().clone(),
@@ -189,6 +193,12 @@ impl Jvm {
                     self.stack.push_operand(object_ref)?;
                     break;
                 }
+                Instruction::InvokeDynamic(ref index) => self.invoke_dynamic(index)?,
+                Instruction::IfNonNull(offset) => self.if_non_null(offset)?,
+                Instruction::Ireturn => {
+                    self.ireturn()?;
+                    break;
+                }
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -198,6 +208,30 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn ireturn(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+
+        if let FrameValue::Int(value) = operand {
+            let val = match self.stack.method_descriptor()?.return_descriptor {
+                ReturnDescriptor::Void => {
+                    bail!("method has to return type compatible with int, is void")
+                }
+                ReturnDescriptor::FieldType(field_type) => match field_type {
+                    FieldType::BaseType(base_type) => match base_type {
+                        BaseType::Int => todo!(),
+                        BaseType::Boolean => FrameValue::Boolean(value != 0),
+                        b => bail!("method has to return type compatible with int, is {b:?}"),
+                    },
+                    f => bail!("method has to return type compatible with int, is {f:?}"),
+                },
+            };
+            self.stack.pop()?;
+            self.stack.push_operand(val)
+        } else {
+            bail!("ireturn can only return int, is {operand:?}")
+        }
     }
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
@@ -240,8 +274,13 @@ impl Jvm {
                     .code()
                     .context("method {method_name} has no code")?
                     .to_vec();
-                self.stack
-                    .push(method_name, operands, code, class.identifier().clone());
+                self.stack.push(
+                    method_name,
+                    descriptor,
+                    operands,
+                    code,
+                    class.identifier().clone(),
+                );
                 self.execute()
             } else if let Some(return_value) =
                 self.run_native_method(&class, &method_name, operands)?
@@ -398,6 +437,19 @@ impl Jvm {
         }
     }
 
+    fn if_non_null(&mut self, offset: i16) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        if !value.is_reference() {
+            bail!("ifnonnull value has to be reference, is {value:?}");
+        }
+
+        if !value.is_null() {
+            self.stack.offset_pc(offset)
+        } else {
+            Ok(())
+        }
+    }
+
     fn new_instruction(&mut self, index: &CpIndex) -> Result<()> {
         let current_class = self.current_class()?;
 
@@ -456,6 +508,7 @@ impl Jvm {
                 .to_vec();
             self.stack.push(
                 method_name.to_string(),
+                method_descriptor,
                 operands,
                 code,
                 class.identifier().clone(),
@@ -464,6 +517,61 @@ impl Jvm {
         } else {
             bail!("TODO: invokespecial method lookup")
         }
+    }
+
+    fn invoke_dynamic(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (bootstrap_method_attr_index, name_and_type_index) = if let CpInfo::InvokeDynamic {
+            bootstrap_method_attr_index,
+            name_and_type_index,
+        } =
+            current_class.cp_item(index)?
+        {
+            (bootstrap_method_attr_index, name_and_type_index)
+        } else {
+            bail!("no invoke dynamic item at index {index:?}")
+        };
+
+        self.resolve_dynamically_computed(bootstrap_method_attr_index, name_and_type_index)?;
+        bail!("TODO: invokedynamic")
+    }
+
+    fn resolve_dynamically_computed(
+        &mut self,
+        bootstrap_method_attr_index: &CpIndex,
+        name_and_type_index: &CpIndex,
+    ) -> Result<()> {
+        let method_handle =
+            self.resolve_method_handle(bootstrap_method_attr_index, name_and_type_index)?;
+        bail!("TODO: callsite resolution")
+    }
+
+    fn resolve_method_handle(
+        &mut self,
+        bootstrap_method_attr_index: &CpIndex,
+        name_and_type_index: &CpIndex,
+    ) -> Result<ObjectId> {
+        let current_class = self.current_class()?;
+
+        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+        let method_descriptor = MethodDescriptor::new(descriptor)?;
+        if let ReturnDescriptor::FieldType(FieldType::ObjectType { class_name }) =
+            method_descriptor.return_descriptor
+        {
+            self.initialize(&ClassIdentifier::from_path(&class_name)?)?;
+        }
+
+        for parameter in method_descriptor.parameters {
+            if let FieldType::ObjectType { class_name } = parameter {
+                self.initialize(&ClassIdentifier::from_path(&class_name)?)?;
+            }
+        }
+
+        let method_type_identifier =
+            ClassIdentifier::new("java.lang.invoke.MethodType".to_string())?;
+        let class = self.resolve_class(&method_type_identifier)?;
+
+        bail!("TODO: method handle resolution")
     }
 
     fn is_instance_initialization_method(name: &str, descriptor: &str) -> bool {
@@ -482,38 +590,37 @@ impl Jvm {
             operands
         );
 
-        if class.identifier() == &ClassIdentifier::new("java.lang.Class".to_string())?
-            && name == "initClassName"
-        {
-            if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
-                operands.first().context("no operands provided")?
-            {
-                let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
-                let class = self.resolve_class(&string_identifier)?;
+        if class.identifier() == &ClassIdentifier::new("java.lang.Class".to_string())? {
+            if name == "initClassName" {
+                if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
+                    operands.first().context("no operands provided")?
+                {
+                    let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
+                    let class = self.resolve_class(&string_identifier)?;
 
-                let fields = self.default_instance_fields(&class)?;
-                let object_id = self.heap.allocate(class.identifier().clone(), fields);
-                let bytes = format!("{identifier:?}")
-                    .into_bytes()
-                    .iter()
-                    .map(|b| ArrayValue::Byte(*b))
-                    .collect();
-                let byte_array =
-                    FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
-                self.heap
-                    .set_field(&object_id, "value", byte_array.into())?;
-                return Ok(Some(FrameValue::Reference(ReferenceValue::Object(
-                    object_id,
-                ))));
-            } else {
-                bail!("first operand has to be a reference")
+                    let fields = self.default_instance_fields(&class)?;
+                    let object_id = self.heap.allocate(class.identifier().clone(), fields);
+                    let bytes = format!("{identifier:?}")
+                        .into_bytes()
+                        .iter()
+                        .map(|b| ArrayValue::Byte(*b))
+                        .collect();
+                    let byte_array =
+                        FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
+                    self.heap
+                        .set_field(&object_id, "value", byte_array.into())?;
+                    return Ok(Some(FrameValue::Reference(ReferenceValue::Object(
+                        object_id,
+                    ))));
+                } else {
+                    bail!("first operand has to be a reference")
+                }
+            }
+
+            if name == "desiredAssertionStatus0" {
+                return Ok(Some(FrameValue::Int(0)));
             }
         }
-
-        debug!(
-            "finished native method '{name}' in {:?}",
-            class.identifier()
-        );
 
         Ok(None)
     }
@@ -589,6 +696,7 @@ impl From<FrameValue> for FieldValue {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
             FrameValue::ReturnAddress => todo!(),
+            FrameValue::Boolean(val) => Self::Integer(val.into()),
         }
     }
 }
