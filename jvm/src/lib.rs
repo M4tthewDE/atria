@@ -269,6 +269,7 @@ impl Jvm {
                 Instruction::Iand => self.iand()?,
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
                 Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
+                Instruction::Ifgt(offset) => self.if_gt(offset)?,
             }
 
             match instruction {
@@ -429,6 +430,15 @@ impl Jvm {
         let field_value = class.get_field_value(&name)?;
 
         self.stack.push_operand(field_value.into())
+    }
+
+    fn if_gt(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if operand.int()? > 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
     }
 
     fn if_eq(&mut self, offset: i16) -> Result<()> {

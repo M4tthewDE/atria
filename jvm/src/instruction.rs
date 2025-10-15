@@ -58,6 +58,7 @@ pub enum Instruction {
     Iand,
     Ifeq(i16),
     Goto(i16),
+    Ifgt(i16),
 }
 
 impl Instruction {
@@ -100,6 +101,7 @@ impl Instruction {
             0x7e => Instruction::Iand,
             0x99 => Instruction::Ifeq(offset(bytes)?),
             0x9a => Instruction::IfNe(offset(bytes)?),
+            0x9d => Instruction::Ifgt(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
             0xa7 => Instruction::Goto(offset(bytes)?),
@@ -161,6 +163,7 @@ impl Instruction {
             Self::Iand => 1,
             Self::Ifeq(_) => 3,
             Self::Goto(_) => 3,
+            Self::Ifgt(_) => 3,
         }
     }
 }
