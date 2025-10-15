@@ -161,7 +161,11 @@ impl Jvm {
 
     #[instrument(skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
-        debug!("running {}", self.stack.method_name()?,);
+        debug!(
+            "running {} {:?}",
+            self.stack.method_name()?,
+            self.stack.method_descriptor()?
+        );
         loop {
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");

@@ -100,7 +100,7 @@ impl FieldType {
             "S" => Self::BaseType(BaseType::Short),
             "Z" => Self::BaseType(BaseType::Boolean),
             "L" => Self::ObjectType {
-                class_name: raw[1..raw.len() - 1].to_string(),
+                class_name: raw[1..raw.find(';').context("invalid field type")?].to_string(),
             },
             "[" => Self::ComponentType(Box::new(Self::new(&raw[1..])?)),
             _ => bail!("unknown field type: {raw}"),
@@ -140,6 +140,24 @@ mod tests {
                 class_name: "java/lang/Object".to_string()
             })
         );
+    }
+
+    #[test]
+    fn method_descriptor_multiple_parameters() {
+        let descriptor = MethodDescriptor::new("(Ljava/lang/String;Ljava/lang/Class;)V").unwrap();
+        assert_eq!(
+            descriptor.parameters,
+            vec![
+                FieldType::ObjectType {
+                    class_name: "java/lang/String".to_string()
+                },
+                FieldType::ObjectType {
+                    class_name: "java/lang/Class".to_string()
+                }
+            ]
+        );
+
+        assert_eq!(descriptor.return_descriptor, ReturnDescriptor::Void,);
     }
 
     #[test]
