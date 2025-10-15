@@ -56,8 +56,11 @@ impl Heap {
         let object = self
             .objects
             .get_mut(object_id)
-            .context(format!("field '{name}' not found on object {object_id:?}"))?;
-        object.fields.insert(name.to_string(), value);
+            .context(format!("unknown object with {object_id:?}"))?;
+        object
+            .fields
+            .insert(name.to_string(), value)
+            .context(format!("field '{name}' not found on object {object:?}"))?;
         Ok(())
     }
 }

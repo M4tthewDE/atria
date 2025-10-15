@@ -33,6 +33,7 @@ pub enum Instruction {
     IfNe(i16),
     GetStatic(CpIndex),
     LdcW(CpIndex),
+    PutField(CpIndex),
 }
 
 impl Instruction {
@@ -64,6 +65,7 @@ impl Instruction {
             0xb2 => Instruction::GetStatic(cp_index(bytes)),
             0xb3 => Instruction::PutStatic(cp_index(bytes)),
             0xb4 => Instruction::GetField(cp_index(bytes)),
+            0xb5 => Instruction::PutField(cp_index(bytes)),
             0xb6 => Instruction::InvokeVirtual(cp_index(bytes)),
             0xb7 => Instruction::InvokeSpecial(cp_index(bytes)),
             0xb8 => Instruction::InvokeStatic(cp_index(bytes)),
@@ -100,6 +102,7 @@ impl Instruction {
             Self::IfNe(_) => 3,
             Self::GetStatic(_) => 3,
             Self::LdcW(_) => 3,
+            Self::PutField(_) => 3,
         }
     }
 }

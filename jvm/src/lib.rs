@@ -203,6 +203,7 @@ impl Jvm {
                 }
                 Instruction::IfNe(offset) => self.if_ne(offset)?,
                 Instruction::GetStatic(ref index) => self.get_static(index)?,
+                Instruction::PutField(ref index) => self.put_field(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -213,6 +214,37 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn put_field(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no field reference at index {index:?}")
+        };
+
+        let class = current_class.class_identifier(class_index)?;
+        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+
+        self.resolve_field(&class, name, descriptor)?;
+
+        let value = self.stack.pop_operand()?;
+        let object_ref = self.stack.pop_operand()?;
+
+        if object_ref.is_array() || !object_ref.is_reference() {
+            bail!("object ref has to be reference but not array, is {object_ref:?}")
+        }
+
+        if let FrameValue::Reference(ReferenceValue::Object(object_id)) = object_ref {
+            self.heap.set_field(&object_id, name, value.into())
+        } else {
+            bail!("object ref has to be reference but not array, is {object_ref:?}")
+        }
     }
 
     fn get_static(&mut self, index: &CpIndex) -> Result<()> {
