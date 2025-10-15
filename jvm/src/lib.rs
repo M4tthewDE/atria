@@ -327,15 +327,26 @@ impl Jvm {
 
         let descriptor = class.method_descriptor(&method)?;
 
+        let operands = self.stack.pop_operands(descriptor.parameters.len())?;
         if method.is_native() {
-            let operands = self.stack.pop_operands(descriptor.parameters.len())?;
             if let Some(return_value) = self.run_native_method(&class, method_name, operands)? {
                 self.stack.push_operand(return_value)
             } else {
                 Ok(())
             }
         } else {
-            bail!("TODO: invokestatic")
+            let code = method
+                .code()
+                .context("method {method_name} has no code")?
+                .to_vec();
+            self.stack.push(
+                method_name.to_string(),
+                descriptor,
+                operands,
+                code,
+                class_identifier,
+            );
+            self.execute()
         }
     }
 
