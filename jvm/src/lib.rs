@@ -267,10 +267,14 @@ impl Jvm {
                 Instruction::Istore(index) => self.istore(index)?,
                 Instruction::Isub => self.isub()?,
                 Instruction::Iand => self.iand()?,
+                Instruction::Ifeq(offset) => self.if_eq(offset)?,
             }
 
             match instruction {
-                Instruction::IfNull(_) | Instruction::IfNe(_) | Instruction::IfNonNull(_) => {}
+                Instruction::IfNull(_)
+                | Instruction::IfNe(_)
+                | Instruction::IfNonNull(_)
+                | Instruction::Ifeq(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
@@ -425,9 +429,18 @@ impl Jvm {
         self.stack.push_operand(field_value.into())
     }
 
-    fn if_ne(&mut self, offset: i16) -> Result<()> {
+    fn if_eq(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? == 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_ne(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if operand.int()? != 0 {
             self.stack.offset_pc(offset)
         } else {
             self.stack.offset_pc(3)
