@@ -2,7 +2,9 @@ use std::fmt::Debug;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
-use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
+use parser::class::descriptor::{
+    BaseType, FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor,
+};
 use parser::class::{
     constant_pool::{CpIndex, CpInfo},
     field::Field,
@@ -714,7 +716,10 @@ impl Jvm {
                         "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
                             ClassIdentifier::new("java.lang.Integer")?,
                         )))),
-                        _ => bail!("invalid primitve class name: '{name}'"),
+                        "boolean" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Boolean")?,
+                        )))),
+                        _ => bail!("invalid primitive class name: '{name}'"),
                     }
                 }
                 _ => bail!("native method not implemented"),
@@ -727,6 +732,8 @@ impl Jvm {
                 }
                 _ => bail!("native method not implemented"),
             }
+        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.Unsafe")? {
+            Ok(None)
         } else {
             bail!("native method not implemented")
         }
@@ -885,6 +892,16 @@ impl ClassIdentifier {
             if let FieldType::ComponentType(field_type) = descriptor.field_type {
                 match *field_type {
                     FieldType::ObjectType { class_name } => Self::new(&class_name),
+                    FieldType::BaseType(base_type) => match base_type {
+                        BaseType::Byte => Self::new("java.lang.Byte"),
+                        BaseType::Char => Self::new("java.lang.Char"),
+                        BaseType::Double => Self::new("java.lang.Double"),
+                        BaseType::Float => Self::new("java.lang.Float"),
+                        BaseType::Int => Self::new("java.lang.Integer"),
+                        BaseType::Long => Self::new("java.lang.Long"),
+                        BaseType::Short => Self::new("java.lang.Short"),
+                        BaseType::Boolean => Self::new("java.lang.Boolean"),
+                    },
                     _ => bail!("invalid array class: {value}"),
                 }
             } else {
