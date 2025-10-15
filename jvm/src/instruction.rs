@@ -34,11 +34,14 @@ pub enum Instruction {
     GetStatic(CpIndex),
     LdcW(CpIndex),
     PutField(CpIndex),
+    Iload(u8),
+    AconstNull,
 }
 
 impl Instruction {
     pub fn new(bytes: &[u8]) -> Result<Self> {
         Ok(match bytes[0] {
+            0x1 => Instruction::AconstNull,
             0x2 => Instruction::Iconst(-1),
             0x3 => Instruction::Iconst(0),
             0x4 => Instruction::Iconst(1),
@@ -48,6 +51,10 @@ impl Instruction {
             0x8 => Instruction::Iconst(5),
             0x12 => Instruction::Ldc(bytes[1].into()),
             0x13 => Instruction::LdcW(cp_index(bytes)),
+            0x1a => Instruction::Iload(0),
+            0x1b => Instruction::Iload(1),
+            0x1c => Instruction::Iload(2),
+            0x1d => Instruction::Iload(3),
             0x2a => Instruction::Aload(0),
             0x2b => Instruction::Aload(1),
             0x2c => Instruction::Aload(2),
@@ -103,6 +110,8 @@ impl Instruction {
             Self::GetStatic(_) => 3,
             Self::LdcW(_) => 3,
             Self::PutField(_) => 3,
+            Self::Iload(_) => 1,
+            Self::AconstNull => 1,
         }
     }
 }

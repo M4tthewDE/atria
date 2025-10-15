@@ -204,6 +204,10 @@ impl Jvm {
                 Instruction::IfNe(offset) => self.if_ne(offset)?,
                 Instruction::GetStatic(ref index) => self.get_static(index)?,
                 Instruction::PutField(ref index) => self.put_field(index)?,
+                Instruction::Iload(index) => self.iload(index)?,
+                Instruction::AconstNull => self
+                    .stack
+                    .push_operand(FrameValue::Reference(ReferenceValue::Null))?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -214,6 +218,16 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn iload(&mut self, index: u8) -> Result<()> {
+        let value = self.stack.local_variable(index.into())?;
+
+        if !matches!(value, FrameValue::Int(_)) {
+            bail!("value has to be int, is {value:?}");
+        }
+
+        self.stack.push_operand(value)
     }
 
     fn put_field(&mut self, index: &CpIndex) -> Result<()> {
