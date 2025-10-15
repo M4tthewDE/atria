@@ -159,7 +159,7 @@ impl Jvm {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(c = %self.stack.current_class()?))]
+    #[instrument(name = "", skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
         debug!(
             "running {} {:?}",
@@ -836,13 +836,7 @@ impl ClassIdentifier {
 
 impl Display for ClassIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for package in self.package.split('.') {
-            write!(f, "{}.", package.chars().next().unwrap_or_default())?;
-        }
-
-        write!(f, "{}", self.name)?;
-
-        Ok(())
+        write!(f, "{}", self.name)
     }
 }
 

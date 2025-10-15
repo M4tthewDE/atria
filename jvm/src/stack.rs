@@ -139,6 +139,7 @@ impl Frame {
                     .context("no operands in operand stack")?,
             );
         }
+        operands.reverse();
 
         Ok(operands)
     }
