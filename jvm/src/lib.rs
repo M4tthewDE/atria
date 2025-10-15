@@ -166,7 +166,7 @@ impl Jvm {
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
             match instruction {
-                Instruction::Ldc(ref index) => {
+                Instruction::Ldc(ref index) | Instruction::LdcW(ref index) => {
                     self.ldc(index)?;
                 }
                 Instruction::InvokeVirtual(ref index) => self.invoke_virtual(index)?,
@@ -255,18 +255,25 @@ impl Jvm {
     }
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class_mut()?;
-        match current_class.cp_item(index)? {
+        let current_class = self.current_class()?;
+
+        let value = match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let name = current_class.utf8(name_index)?;
                 let identifier = ClassIdentifier::from_path(name)?;
                 self.resolve_class(&identifier)?;
 
-                self.stack
-                    .push_operand(FrameValue::Reference(ReferenceValue::Class(identifier)))
+                FrameValue::Reference(ReferenceValue::Class(identifier))
+            }
+            CpInfo::String { string_index } => {
+                let value = current_class.utf8(string_index)?;
+                let object_id = self.new_string(value.to_string())?;
+                FrameValue::Reference(ReferenceValue::Object(object_id))
             }
             info => bail!("item {info:?} at index {index:?} is not loadable"),
-        }
+        };
+
+        self.stack.push_operand(value)
     }
 
     fn invoke_virtual(&mut self, index: &CpIndex) -> Result<()> {
@@ -628,21 +635,7 @@ impl Jvm {
                     if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
                         operands.first().context("no operands provided")?
                     {
-                        let string_identifier =
-                            ClassIdentifier::new("java.lang.String".to_string())?;
-                        let class = self.resolve_class(&string_identifier)?;
-
-                        let fields = self.default_instance_fields(&class)?;
-                        let object_id = self.heap.allocate(class.identifier().clone(), fields);
-                        let bytes = format!("{identifier:?}")
-                            .into_bytes()
-                            .iter()
-                            .map(|b| ArrayValue::Byte(*b))
-                            .collect();
-                        let byte_array =
-                            FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
-                        self.heap
-                            .set_field(&object_id, "value", byte_array.into())?;
+                        let object_id = self.new_string(format!("{identifier:?}").to_string())?;
                         Ok(Some(FrameValue::Reference(ReferenceValue::Object(
                             object_id,
                         ))))
@@ -653,9 +646,34 @@ impl Jvm {
                 "desiredAssertionStatus0" => Ok(Some(FrameValue::Int(0))),
                 _ => bail!("native method not implemented"),
             }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.Runtime".to_string())? {
+            match name {
+                "availableProcessors" => {
+                    let cpus = std::thread::available_parallelism()?;
+                    Ok(Some(FrameValue::Int(cpus.get().try_into()?)))
+                }
+                _ => bail!("native method not implemented"),
+            }
         } else {
             bail!("native method not implemented")
         }
+    }
+
+    fn new_string(&mut self, value: String) -> Result<ObjectId> {
+        let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
+        let class = self.resolve_class(&string_identifier)?;
+
+        let fields = self.default_instance_fields(&class)?;
+        let object_id = self.heap.allocate(class.identifier().clone(), fields);
+        let bytes = value
+            .into_bytes()
+            .iter()
+            .map(|b| ArrayValue::Byte(*b))
+            .collect();
+        let byte_array = FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
+        self.heap
+            .set_field(&object_id, "value", byte_array.into())?;
+        Ok(object_id)
     }
 
     fn default_instance_fields(&mut self, class: &Class) -> Result<HashMap<String, FieldValue>> {
@@ -749,23 +767,36 @@ impl From<FieldValue> for FrameValue {
 /// Identifies a class using package and name
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct ClassIdentifier {
+    is_array: bool,
     package: String,
     name: String,
 }
 
 impl ClassIdentifier {
     fn new(value: String) -> Result<Self> {
-        let mut parts: Vec<&str> = value.split('.').collect();
-        let name = parts
-            .last()
-            .context("invalid class identifier {value}")?
-            .to_string();
-        parts.truncate(parts.len() - 1);
+        if let Ok(descriptor) = FieldDescriptor::new(&value) {
+            if let FieldType::ComponentType(field_type) = descriptor.field_type {
+                match *field_type {
+                    FieldType::ObjectType { class_name } => Self::new(class_name),
+                    _ => bail!("invalid array class: {value}"),
+                }
+            } else {
+                bail!("invalid array class: {value}")
+            }
+        } else {
+            let mut parts: Vec<&str> = value.split('.').collect();
+            let name = parts
+                .last()
+                .context("invalid class identifier {value}")?
+                .to_string();
+            parts.truncate(parts.len() - 1);
 
-        Ok(Self {
-            package: parts.join("."),
-            name,
-        })
+            Ok(Self {
+                is_array: false,
+                package: parts.join("."),
+                name,
+            })
+        }
     }
 
     fn path(&self) -> Result<String> {
@@ -781,18 +812,9 @@ impl ClassIdentifier {
             .context("unable to build path string")
     }
 
+    // TODO: this could be merged into new
     fn from_path(path: &str) -> Result<Self> {
-        let mut parts: Vec<&str> = path.split('/').collect();
-        let name = parts
-            .last()
-            .context("invalid class identifier {value}")?
-            .to_string();
-        parts.truncate(parts.len() - 1);
-
-        Ok(Self {
-            package: parts.join("."),
-            name,
-        })
+        Self::new(path.replace("/", "."))
     }
 
     fn with_slashes(&self) -> Result<String> {

@@ -32,6 +32,7 @@ pub enum Instruction {
     Ireturn,
     IfNe(i16),
     GetStatic(CpIndex),
+    LdcW(CpIndex),
 }
 
 impl Instruction {
@@ -45,6 +46,7 @@ impl Instruction {
             0x7 => Instruction::Iconst(4),
             0x8 => Instruction::Iconst(5),
             0x12 => Instruction::Ldc(bytes[1].into()),
+            0x13 => Instruction::LdcW(cp_index(bytes)),
             0x2a => Instruction::Aload(0),
             0x2b => Instruction::Aload(1),
             0x2c => Instruction::Aload(2),
@@ -97,6 +99,7 @@ impl Instruction {
             Self::Ireturn => 1,
             Self::IfNe(_) => 3,
             Self::GetStatic(_) => 3,
+            Self::LdcW(_) => 3,
         }
     }
 }
