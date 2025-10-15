@@ -198,7 +198,7 @@ impl Jvm {
                     break;
                 }
                 Instruction::IfNe(offset) => self.if_ne(offset)?,
-
+                Instruction::GetStatic(ref index) => self.get_static(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -209,6 +209,25 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn get_static(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no field reference at index {index:?}")
+        };
+
+        let (name, _) = current_class.name_and_type(name_and_type_index)?;
+        let class_identifier = current_class.class_identifier(class_index)?;
+        let class = self.class(&class_identifier)?;
+        let field_value = class.get_field_value(name)?;
+        self.stack.push_operand(field_value.into())
     }
 
     fn if_ne(&mut self, offset: i16) -> Result<()> {
@@ -603,38 +622,40 @@ impl Jvm {
         );
 
         if class.identifier() == &ClassIdentifier::new("java.lang.Class".to_string())? {
-            if name == "initClassName" {
-                if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
-                    operands.first().context("no operands provided")?
-                {
-                    let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
-                    let class = self.resolve_class(&string_identifier)?;
+            match name {
+                "registerNatives" => Ok(None),
+                "initClassName" => {
+                    if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
+                        operands.first().context("no operands provided")?
+                    {
+                        let string_identifier =
+                            ClassIdentifier::new("java.lang.String".to_string())?;
+                        let class = self.resolve_class(&string_identifier)?;
 
-                    let fields = self.default_instance_fields(&class)?;
-                    let object_id = self.heap.allocate(class.identifier().clone(), fields);
-                    let bytes = format!("{identifier:?}")
-                        .into_bytes()
-                        .iter()
-                        .map(|b| ArrayValue::Byte(*b))
-                        .collect();
-                    let byte_array =
-                        FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
-                    self.heap
-                        .set_field(&object_id, "value", byte_array.into())?;
-                    return Ok(Some(FrameValue::Reference(ReferenceValue::Object(
-                        object_id,
-                    ))));
-                } else {
-                    bail!("first operand has to be a reference")
+                        let fields = self.default_instance_fields(&class)?;
+                        let object_id = self.heap.allocate(class.identifier().clone(), fields);
+                        let bytes = format!("{identifier:?}")
+                            .into_bytes()
+                            .iter()
+                            .map(|b| ArrayValue::Byte(*b))
+                            .collect();
+                        let byte_array =
+                            FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
+                        self.heap
+                            .set_field(&object_id, "value", byte_array.into())?;
+                        Ok(Some(FrameValue::Reference(ReferenceValue::Object(
+                            object_id,
+                        ))))
+                    } else {
+                        bail!("first operand has to be a reference")
+                    }
                 }
+                "desiredAssertionStatus0" => Ok(Some(FrameValue::Int(0))),
+                _ => bail!("native method not implemented"),
             }
-
-            if name == "desiredAssertionStatus0" {
-                return Ok(Some(FrameValue::Int(0)));
-            }
+        } else {
+            bail!("native method not implemented")
         }
-
-        Ok(None)
     }
 
     fn default_instance_fields(&mut self, class: &Class) -> Result<HashMap<String, FieldValue>> {

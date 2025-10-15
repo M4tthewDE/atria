@@ -31,6 +31,7 @@ pub enum Instruction {
     IfNonNull(i16),
     Ireturn,
     IfNe(i16),
+    GetStatic(CpIndex),
 }
 
 impl Instruction {
@@ -58,6 +59,7 @@ impl Instruction {
             0xac => Instruction::Ireturn,
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
+            0xb2 => Instruction::GetStatic(cp_index(bytes)),
             0xb3 => Instruction::PutStatic(cp_index(bytes)),
             0xb4 => Instruction::GetField(cp_index(bytes)),
             0xb6 => Instruction::InvokeVirtual(cp_index(bytes)),
@@ -94,6 +96,7 @@ impl Instruction {
             Self::IfNonNull(_) => 3,
             Self::Ireturn => 1,
             Self::IfNe(_) => 3,
+            Self::GetStatic(_) => 3,
         }
     }
 }
