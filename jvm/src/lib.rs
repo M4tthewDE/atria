@@ -264,6 +264,7 @@ impl Jvm {
                     self.lreturn()?;
                     break;
                 }
+                Instruction::Istore(index) => self.istore(index)?,
             }
 
             match instruction {
@@ -577,6 +578,15 @@ impl Jvm {
         let class = self.class(identifier)?;
         let field_value = class.get_field_value(&name)?;
         self.stack.push_operand(field_value.into())
+    }
+
+    fn istore(&mut self, index: u8) -> Result<()> {
+        let int = self.stack.pop_operand()?;
+        if int.int().is_err() {
+            bail!("TODO: istore objectref has to be int")
+        }
+
+        self.stack.set_local_variable(index.into(), int)
     }
 
     fn astore(&mut self, index: u8) -> Result<()> {

@@ -53,6 +53,7 @@ pub enum Instruction {
     Iastore,
     Sipush(u16),
     Lreturn,
+    Istore(u8),
 }
 
 impl Instruction {
@@ -78,6 +79,10 @@ impl Instruction {
             0x2b => Instruction::Aload(1),
             0x2c => Instruction::Aload(2),
             0x2d => Instruction::Aload(3),
+            0x3b => Instruction::Istore(0),
+            0x3c => Instruction::Istore(1),
+            0x3d => Instruction::Istore(2),
+            0x3e => Instruction::Istore(3),
             0x4b => Instruction::Astore(0),
             0x4c => Instruction::Astore(1),
             0x4d => Instruction::Astore(2),
@@ -143,6 +148,7 @@ impl Instruction {
             Self::Iastore => 1,
             Self::Sipush(_) => 3,
             Self::Lreturn => 1,
+            Self::Istore(_) => 1,
         }
     }
 }
