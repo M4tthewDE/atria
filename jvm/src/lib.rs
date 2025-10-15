@@ -266,6 +266,7 @@ impl Jvm {
                 }
                 Instruction::Istore(index) => self.istore(index)?,
                 Instruction::Isub => self.isub()?,
+                Instruction::Iand => self.iand()?,
             }
 
             match instruction {
@@ -275,6 +276,13 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn iand(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        self.stack.push_operand(FrameValue::Int(value1 & value2))
     }
 
     fn isub(&mut self) -> Result<()> {
