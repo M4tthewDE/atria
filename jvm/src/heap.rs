@@ -231,6 +231,25 @@ impl Heap {
         Ok(())
     }
 
+    pub fn store_into_primitive_array(
+        &mut self,
+        id: &HeapId,
+        index: usize,
+        value: PrimitiveArrayValue,
+    ) -> Result<()> {
+        let arr = self
+            .items
+            .get_mut(id)
+            .context(format!("unknown object with {id:?}"))?;
+
+        match arr {
+            HeapItem::PrimitiveArray(_, values) => values.insert(index, value),
+            _ => bail!("object at {id:?} is not a reference array, is {arr:?}"),
+        }
+
+        Ok(())
+    }
+
     pub fn get_primitive_array(&self, id: &HeapId) -> Result<&Vec<PrimitiveArrayValue>> {
         let item = self
             .items

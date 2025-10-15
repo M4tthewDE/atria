@@ -200,11 +200,12 @@ impl Jvm {
                 Instruction::AconstNull => self
                     .stack
                     .push_operand(FrameValue::Reference(ReferenceValue::Null))?,
-                Instruction::Aastore => self.aa_store()?,
+                Instruction::Aastore => self.aastore()?,
                 Instruction::Bipush(value) => {
                     self.stack.push_operand(FrameValue::Int(value.into()))?
                 }
                 Instruction::Newarray(atype) => self.new_array(atype)?,
+                Instruction::Castore => self.castore()?,
             }
 
             match instruction {
@@ -214,6 +215,26 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn castore(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        let index = self.stack.pop_operand()?;
+        let array_ref = self.stack.pop_operand()?;
+
+        if !array_ref.is_reference() && self.is_array(&array_ref)? {
+            bail!("arrayref has to be a reference to an array, is {array_ref:?}")
+        }
+
+        let index = index.int()? as usize;
+        let value = value.int()?;
+        let heap_id = array_ref.reference()?.heap_id()?;
+
+        self.heap.store_into_primitive_array(
+            heap_id,
+            index,
+            PrimitiveArrayValue::Short(value as u16),
+        )
     }
 
     fn new_array(&mut self, atype: u8) -> Result<()> {
@@ -239,7 +260,7 @@ impl Jvm {
         }
     }
 
-    fn aa_store(&mut self) -> Result<()> {
+    fn aastore(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?;
         let index = self.stack.pop_operand()?;
         let array_ref = self.stack.pop_operand()?;
