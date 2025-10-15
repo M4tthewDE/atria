@@ -2,14 +2,20 @@ use anyhow::{Context, Result, bail};
 
 #[derive(Debug)]
 pub struct FieldDescriptor {
+    raw: String,
     pub field_type: FieldType,
 }
 
 impl FieldDescriptor {
     pub fn new(raw: &str) -> Result<Self> {
         Ok(Self {
+            raw: raw.to_string(),
             field_type: FieldType::new(raw)?,
         })
+    }
+
+    pub fn raw(&self) -> &str {
+        &self.raw
     }
 }
 

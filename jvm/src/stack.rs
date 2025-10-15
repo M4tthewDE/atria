@@ -213,4 +213,20 @@ impl FrameValue {
     pub fn is_null(&self) -> bool {
         matches!(self, FrameValue::Reference(ReferenceValue::Null))
     }
+
+    pub fn reference(&self) -> Result<&ReferenceValue> {
+        if let Self::Reference(reference) = self {
+            Ok(reference)
+        } else {
+            bail!("frame value is not a reference")
+        }
+    }
+
+    pub fn int(&self) -> Result<i32> {
+        if let Self::Int(int) = self {
+            Ok(*int)
+        } else {
+            bail!("frame value is not a int")
+        }
+    }
 }

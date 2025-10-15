@@ -80,7 +80,7 @@ impl Jvm {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        self.initialize(&ClassIdentifier::new("java.lang.Class".to_string())?)?;
+        self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         let main_class = &self.main_class.clone();
         self.initialize(main_class)?;
         bail!("TODO: run")
@@ -100,7 +100,7 @@ impl Jvm {
         class.initializing();
         class.initialize_static_fields()?;
 
-        let class_identifier = ClassIdentifier::new("java.lang.Class".to_string())?;
+        let class_identifier = ClassIdentifier::new("java.lang.Class")?;
         if identifier != &class_identifier {
             let class_class = self.class(&class_identifier)?;
             for field in class_class.fields() {
@@ -229,26 +229,11 @@ impl Jvm {
             bail!("arrayref has to be a reference to an array, is {array_ref:?}")
         }
 
-        let index = if let FrameValue::Int(val) = index {
-            val
-        } else {
-            bail!("index has to be int, is {index:?}")
-        };
+        let index = index.int()? as usize;
+        let value = value.reference()?.clone();
+        let heap_id = array_ref.reference()?.heap_id()?;
 
-        let value = if let FrameValue::Reference(reference) = value {
-            reference
-        } else {
-            bail!("value has to be a reference, is {array_ref:?}")
-        };
-
-        let heap_id = if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = array_ref {
-            heap_id
-        } else {
-            bail!("invalid arrayref: {array_ref:?}")
-        };
-
-        self.heap
-            .store_into_reference_array(&heap_id, index as usize, value)
+        self.heap.store_into_reference_array(heap_id, index, value)
     }
 
     fn iload(&mut self, index: u8) -> Result<()> {
@@ -262,21 +247,9 @@ impl Jvm {
     }
 
     fn put_field(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no field reference at index {index:?}")
-        };
+        let (class_identifier, name, descriptor) = self.field_ref(index)?;
 
-        let class = current_class.class_identifier(class_index)?;
-        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-
-        self.resolve_field(&class, name, descriptor)?;
+        self.resolve_field(&class_identifier, &name, descriptor.raw())?;
 
         let value = self.stack.pop_operand()?;
         let object_ref = self.stack.pop_operand()?;
@@ -285,51 +258,33 @@ impl Jvm {
             bail!("object ref has to be reference but not array, is {object_ref:?}")
         }
 
-        if let FrameValue::Reference(ReferenceValue::HeapItem(object_id)) = object_ref {
-            self.heap.set_field(&object_id, name, value.into())
-        } else {
-            bail!("object ref has to be reference but not array, is {object_ref:?}")
-        }
+        let heap_id = object_ref.reference()?.heap_id()?;
+        self.heap.set_field(heap_id, &name, value.into())
     }
 
     fn get_static(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no field reference at index {index:?}")
-        };
-
-        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-        let class_identifier = current_class.class_identifier(class_index)?;
-        self.resolve_field(&class_identifier, name, descriptor)?;
+        let (class_identifier, name, descriptor) = self.field_ref(index)?;
+        self.resolve_field(&class_identifier, &name, descriptor.raw())?;
 
         let class = self.class(&class_identifier)?;
-        let field_value = class.get_field_value(name)?;
+        let field_value = class.get_field_value(&name)?;
+
         self.stack.push_operand(field_value.into())
     }
 
     fn if_ne(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
-        if let FrameValue::Int(val) = operand {
-            if val == 0 {
-                self.stack.offset_pc(offset)
-            } else {
-                self.stack.offset_pc(3)
-            }
+        if operand.int()? == 0 {
+            self.stack.offset_pc(offset)
         } else {
-            bail!("ifne operand has to be int, is {operand:?}")
+            self.stack.offset_pc(3)
         }
     }
 
     fn ireturn(&mut self) -> Result<()> {
         let operand = self.stack.pop_operand()?;
 
-        if matches!(operand, FrameValue::Int(_)) {
+        if operand.int().is_ok() {
             self.stack.pop()?;
             self.stack.push_operand(operand)
         } else {
@@ -343,7 +298,7 @@ impl Jvm {
         let value = match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let name = current_class.utf8(name_index)?;
-                let identifier = ClassIdentifier::from_path(name)?;
+                let identifier = ClassIdentifier::new(name)?;
                 self.resolve_class(&identifier)?;
 
                 FrameValue::Reference(ReferenceValue::Class(identifier))
@@ -360,66 +315,40 @@ impl Jvm {
     }
 
     fn invoke_virtual(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        if let CpInfo::MethodRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            let class_identifier = current_class.class_identifier(class_index)?;
-            let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-            let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
-            let class = self.class(&class_identifier)?;
+        let (class_identifier, name, descriptor) = self.method_ref(index)?;
+        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
+        let class = self.class(&class_identifier)?;
+        let method_descriptor = MethodDescriptor::new(class.utf8(&method.descriptor_index)?)?;
+        let operands = self
+            .stack
+            .pop_operands(method_descriptor.parameters.len() + 1)?;
+        let class = self.class(&class_identifier)?;
+        let method_name = class.method_name(&method)?.to_string();
 
-            if method.is_synchronized() {
-                bail!("TODO: invokevirtual synchronized method");
-            }
-
-            let descriptor = class.method_descriptor(&method)?;
-            let operands = self.stack.pop_operands(descriptor.parameters.len() + 1)?;
-            let method_name = class.method_name(&method)?.to_string();
-
-            if !method.is_native() {
-                let code = method
-                    .code()
-                    .context("method {method_name} has no code")?
-                    .to_vec();
-                self.stack.push(
-                    method_name,
-                    descriptor,
-                    operands,
-                    code,
-                    class.identifier().clone(),
-                );
-                self.execute()
-            } else if let Some(return_value) =
-                self.run_native_method(&class, &method_name, operands)?
-            {
-                self.stack.push_operand(return_value)
-            } else {
-                Ok(())
-            }
+        if !method.is_native() {
+            let code = method
+                .code()
+                .context("method {method_name} has no code")?
+                .to_vec();
+            self.stack.push(
+                method_name,
+                method_descriptor,
+                operands,
+                code,
+                class.identifier().clone(),
+            );
+            self.execute()
+        } else if let Some(return_value) = self.run_native_method(&class, &method_name, operands)? {
+            self.stack.push_operand(return_value)
         } else {
-            bail!("no method reference at index {index:?}")
+            Ok(())
         }
     }
 
     fn invoke_static(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::MethodRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no method reference at index {index:?}")
-        };
+        let (class_identifier, name, descriptor) = self.method_ref(index)?;
 
-        let class_identifier = current_class.class_identifier(class_index)?;
-        let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-
-        let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
         let class = self.class(&class_identifier)?;
 
         if !method.is_static() {
@@ -438,7 +367,7 @@ impl Jvm {
 
         let operands = self.stack.pop_operands(descriptor.parameters.len())?;
         if method.is_native() {
-            if let Some(return_value) = self.run_native_method(&class, method_name, operands)? {
+            if let Some(return_value) = self.run_native_method(&class, &name, operands)? {
                 self.stack.push_operand(return_value)
             } else {
                 Ok(())
@@ -448,13 +377,8 @@ impl Jvm {
                 .code()
                 .context("method {method_name} has no code")?
                 .to_vec();
-            self.stack.push(
-                method_name.to_string(),
-                descriptor,
-                operands,
-                code,
-                class_identifier,
-            );
+            self.stack
+                .push(name, descriptor, operands, code, class_identifier);
             self.execute()
         }
     }
@@ -465,29 +389,17 @@ impl Jvm {
         self.initialize(&array_class)?;
         let length = self.stack.pop_int()?;
         let array = self.heap.allocate_array(array_class, length as usize);
-        self.stack
-            .push_operand(FrameValue::Reference(ReferenceValue::HeapItem(array)))
+        let value = FrameValue::Reference(ReferenceValue::HeapItem(array));
+        self.stack.push_operand(value)
     }
 
     fn put_static(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no field reference at index {index:?}")
-        };
+        let (class_identifier, name, descriptor) = self.field_ref(index)?;
 
-        let class = current_class.class_identifier(class_index)?;
-        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-
-        self.resolve_field(&class, name, descriptor)?;
+        self.resolve_field(&class_identifier, &name, descriptor.raw())?;
         let value = self.stack.pop_operand()?;
-        let class = self.class_mut(&class)?;
-        class.set_field(name, value.into())
+        let class = self.class_mut(&class_identifier)?;
+        class.set_field(&name, value.into())
     }
 
     fn aload(&mut self, index: u8) -> Result<()> {
@@ -505,33 +417,18 @@ impl Jvm {
     }
 
     fn get_field(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::FieldRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no field reference at index {index:?}")
-        };
+        let (class_identifier, name, descriptor) = self.field_ref(index)?;
 
-        let class_identifier = current_class.class_identifier(class_index)?;
-        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-
-        self.resolve_field(&class_identifier, name, descriptor)?;
+        self.resolve_field(&class_identifier, &name, descriptor.raw())?;
         let object_ref = self.stack.pop_operand()?;
         if !object_ref.is_reference() || self.is_array(&object_ref)? {
             bail!("objectref has to be a reference but no array, is {object_ref:?}");
         }
 
-        if let FrameValue::Reference(ReferenceValue::Class(identifier)) = object_ref {
-            let class = self.class(&identifier)?;
-            let field_value = class.get_field_value(name)?;
-            self.stack.push_operand(field_value.into())
-        } else {
-            bail!("TODO: get_field for non class references")
-        }
+        let identifier = object_ref.reference()?.class_identifier()?;
+        let class = self.class(identifier)?;
+        let field_value = class.get_field_value(&name)?;
+        self.stack.push_operand(field_value.into())
     }
 
     fn astore(&mut self, index: u8) -> Result<()> {
@@ -587,24 +484,12 @@ impl Jvm {
     }
 
     fn invoke_special(&mut self, index: &CpIndex) -> Result<()> {
-        let current_class = self.current_class()?;
-        let (class_index, name_and_type_index) = if let CpInfo::MethodRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            (class_index, name_and_type_index)
-        } else {
-            bail!("no method reference at index {index:?}")
-        };
-
-        let class_identifier = current_class.class_identifier(class_index)?;
-        let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-        let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+        let (class_identifier, name, descriptor) = self.method_ref(index)?;
+        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
         let class = self.initialize(&class_identifier)?;
         let method_descriptor = class.method_descriptor(&method)?;
 
-        if !Self::is_instance_initialization_method(method_name, &method_descriptor) {
+        if !Self::is_instance_initialization_method(&name, &method_descriptor) {
             bail!("TODO: invokespecial for non instance initialization methods")
         }
 
@@ -622,10 +507,10 @@ impl Jvm {
                 .pop_operands(method_descriptor.parameters.len() + 1)?;
             let code = method
                 .code()
-                .context(format!("no code found for {method_name} method"))?
+                .context(format!("no code found for {name} method"))?
                 .to_vec();
             self.stack.push(
-                method_name.to_string(),
+                name.to_string(),
                 method_descriptor,
                 operands,
                 code,
@@ -676,17 +561,16 @@ impl Jvm {
         if let ReturnDescriptor::FieldType(FieldType::ObjectType { class_name }) =
             method_descriptor.return_descriptor
         {
-            self.initialize(&ClassIdentifier::from_path(&class_name)?)?;
+            self.initialize(&ClassIdentifier::new(&class_name)?)?;
         }
 
         for parameter in method_descriptor.parameters {
             if let FieldType::ObjectType { class_name } = parameter {
-                self.initialize(&ClassIdentifier::from_path(&class_name)?)?;
+                self.initialize(&ClassIdentifier::new(&class_name)?)?;
             }
         }
 
-        let method_type_identifier =
-            ClassIdentifier::new("java.lang.invoke.MethodType".to_string())?;
+        let method_type_identifier = ClassIdentifier::new("java.lang.invoke.MethodType")?;
         let _class = self.resolve_class(&method_type_identifier)?;
 
         bail!("TODO: method handle resolution")
@@ -708,7 +592,7 @@ impl Jvm {
             operands
         );
 
-        if class.identifier() == &ClassIdentifier::new("java.lang.Class".to_string())? {
+        if class.identifier() == &ClassIdentifier::new("java.lang.Class")? {
             match name {
                 "registerNatives" => Ok(None),
                 "initClassName" => {
@@ -746,14 +630,14 @@ impl Jvm {
                     let name = String::from_utf8(bytes)?;
                     match name.as_str() {
                         "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Integer".to_string())?,
+                            ClassIdentifier::new("java.lang.Integer")?,
                         )))),
                         _ => bail!("invalid primitve class name: '{name}'"),
                     }
                 }
                 _ => bail!("native method not implemented"),
             }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.Runtime".to_string())? {
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.Runtime")? {
             match name {
                 "availableProcessors" => {
                     let cpus = std::thread::available_parallelism()?;
@@ -767,7 +651,7 @@ impl Jvm {
     }
 
     fn new_string(&mut self, value: String) -> Result<HeapId> {
-        let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
+        let string_identifier = ClassIdentifier::new("java.lang.String")?;
         let class = self.resolve_class(&string_identifier)?;
 
         let fields = self.default_instance_fields(&class)?;
@@ -847,6 +731,37 @@ impl Jvm {
             self.resolve_field(&super_class, name, descriptor)
         }
     }
+
+    fn field_ref(&self, index: &CpIndex) -> Result<(ClassIdentifier, String, FieldDescriptor)> {
+        let current_class = self.current_class()?;
+        if let CpInfo::FieldRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            let class_identifier = current_class.class_identifier(class_index)?;
+            let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+            let field_descriptor = FieldDescriptor::new(descriptor)?;
+            Ok((class_identifier, name.to_string(), field_descriptor))
+        } else {
+            bail!("no field reference at index {index:?}")
+        }
+    }
+
+    fn method_ref(&mut self, index: &CpIndex) -> Result<(ClassIdentifier, String, String)> {
+        let current_class = self.current_class()?;
+        if let CpInfo::MethodRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            let class_identifier = current_class.class_identifier(class_index)?;
+            let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+            Ok((class_identifier, name.to_string(), descriptor.to_string()))
+        } else {
+            bail!("no method reference at index {index:?}")
+        }
+    }
 }
 
 impl From<FrameValue> for FieldValue {
@@ -880,11 +795,12 @@ pub struct ClassIdentifier {
 }
 
 impl ClassIdentifier {
-    fn new(value: String) -> Result<Self> {
+    fn new(value: &str) -> Result<Self> {
+        let value = value.replace("/", ".");
         if let Ok(descriptor) = FieldDescriptor::new(&value) {
             if let FieldType::ComponentType(field_type) = descriptor.field_type {
                 match *field_type {
-                    FieldType::ObjectType { class_name } => Self::new(class_name),
+                    FieldType::ObjectType { class_name } => Self::new(&class_name),
                     _ => bail!("invalid array class: {value}"),
                 }
             } else {
@@ -917,11 +833,6 @@ impl ClassIdentifier {
             .map(|p| p.to_owned())
             .clone()
             .context("unable to build path string")
-    }
-
-    // TODO: this could be merged into new
-    fn from_path(path: &str) -> Result<Self> {
-        Self::new(path.replace("/", "."))
     }
 
     fn with_slashes(&self) -> Result<String> {
@@ -962,6 +873,13 @@ impl ReferenceValue {
         match self {
             ReferenceValue::HeapItem(heap_id) => Ok(heap_id),
             _ => bail!("no heap id found"),
+        }
+    }
+
+    pub fn class_identifier(&self) -> Result<&ClassIdentifier> {
+        match self {
+            ReferenceValue::Class(class_identifier) => Ok(class_identifier),
+            _ => bail!("no class identifier found"),
         }
     }
 }

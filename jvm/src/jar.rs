@@ -42,7 +42,7 @@ impl Manifest {
             let parts: Vec<&str> = line.split(' ').collect();
             if parts[0] == "Main-Class:" {
                 return Ok(Self {
-                    main_class: ClassIdentifier::new(parts[1].to_string())?,
+                    main_class: ClassIdentifier::new(parts[1])?,
                 });
             }
         }

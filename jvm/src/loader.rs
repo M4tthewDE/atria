@@ -45,7 +45,7 @@ impl BootstrapClassLoader {
                 let name = class_file
                     .constant_pool
                     .class_name(&class_file.super_class)?;
-                let identifier = ClassIdentifier::from_path(name)?;
+                let identifier = ClassIdentifier::new(name)?;
                 self.load(&identifier)?;
             }
 

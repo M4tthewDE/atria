@@ -103,7 +103,7 @@ impl Class {
     }
 
     pub fn super_class(&self) -> Result<ClassIdentifier> {
-        ClassIdentifier::from_path(
+        ClassIdentifier::new(
             self.class_file
                 .constant_pool
                 .class_name(&self.class_file.super_class)?,
@@ -127,7 +127,7 @@ impl Class {
     }
 
     pub fn class_identifier(&self, index: &CpIndex) -> Result<ClassIdentifier> {
-        ClassIdentifier::from_path(self.class_file.constant_pool.class_name(index)?)
+        ClassIdentifier::new(self.class_file.constant_pool.class_name(index)?)
     }
 
     pub fn name_and_type(&self, index: &CpIndex) -> Result<(&str, &str)> {
