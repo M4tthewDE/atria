@@ -1,4 +1,4 @@
-use crate::{ClassIdentifier, ReferenceValue, heap::HeapId, instruction::Instruction};
+use crate::{ClassIdentifier, ReferenceValue, instruction::Instruction};
 use anyhow::{Context, Result, bail};
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
@@ -201,7 +201,6 @@ impl Frame {
 
 #[derive(Debug, Clone)]
 pub enum FrameValue {
-    ReturnAddress,
     Reference(ReferenceValue),
     Int(i32),
 }
@@ -211,18 +210,7 @@ impl FrameValue {
         matches!(self, Self::Reference(_))
     }
 
-    pub fn is_return_address(&self) -> bool {
-        matches!(self, FrameValue::ReturnAddress)
-    }
-
     pub fn is_null(&self) -> bool {
         matches!(self, FrameValue::Reference(ReferenceValue::Null))
-    }
-
-    pub fn heap_id(&self) -> Result<&HeapId> {
-        match self {
-            FrameValue::Reference(reference_value) => reference_value.heap_id(),
-            _ => bail!("no heap id found"),
-        }
     }
 }

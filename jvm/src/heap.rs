@@ -28,6 +28,10 @@ impl Object {
             fields,
         }
     }
+
+    pub fn class(&self) -> &ClassIdentifier {
+        &self.class_identifier
+    }
 }
 
 #[derive(Debug, Clone)]

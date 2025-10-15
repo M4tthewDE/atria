@@ -21,13 +21,13 @@ use crate::{
     stack::{FrameValue, Stack},
 };
 
-mod class;
-mod heap;
-mod instruction;
-mod jar;
-mod jdk;
-mod loader;
-mod stack;
+pub mod class;
+pub mod heap;
+pub mod instruction;
+pub mod jar;
+pub mod jdk;
+pub mod loader;
+pub mod stack;
 
 pub struct Jvm {
     class_loader: BootstrapClassLoader,
@@ -53,14 +53,6 @@ impl Jvm {
             main_class,
             heap: Heap::default(),
         })
-    }
-
-    fn current_class_mut(&mut self) -> Result<&mut Class> {
-        let current_class = self.stack.current_class()?;
-        self.classes.get_mut(&current_class).context(format!(
-            "current class {} is not initialized",
-            current_class
-        ))
     }
 
     fn current_class(&self) -> Result<Class> {
@@ -209,7 +201,6 @@ impl Jvm {
                     .stack
                     .push_operand(FrameValue::Reference(ReferenceValue::Null))?,
                 Instruction::Aastore => self.aa_store()?,
-                _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
             match instruction {
@@ -545,8 +536,8 @@ impl Jvm {
 
     fn astore(&mut self, index: u8) -> Result<()> {
         let objectref = self.stack.pop_operand()?;
-        if !objectref.is_reference() && !objectref.is_return_address() {
-            bail!("TODO: astore objectref has to be reference or return address")
+        if !objectref.is_reference() {
+            bail!("TODO: astore objectref has to be reference")
         }
 
         self.stack.set_local_variable(index.into(), objectref)
@@ -668,19 +659,19 @@ impl Jvm {
         bootstrap_method_attr_index: &CpIndex,
         name_and_type_index: &CpIndex,
     ) -> Result<()> {
-        let method_handle =
+        let _method_handle =
             self.resolve_method_handle(bootstrap_method_attr_index, name_and_type_index)?;
         bail!("TODO: callsite resolution")
     }
 
     fn resolve_method_handle(
         &mut self,
-        bootstrap_method_attr_index: &CpIndex,
+        _bootstrap_method_attr_index: &CpIndex,
         name_and_type_index: &CpIndex,
     ) -> Result<HeapId> {
         let current_class = self.current_class()?;
 
-        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+        let (_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
         let method_descriptor = MethodDescriptor::new(descriptor)?;
         if let ReturnDescriptor::FieldType(FieldType::ObjectType { class_name }) =
             method_descriptor.return_descriptor
@@ -696,7 +687,7 @@ impl Jvm {
 
         let method_type_identifier =
             ClassIdentifier::new("java.lang.invoke.MethodType".to_string())?;
-        let class = self.resolve_class(&method_type_identifier)?;
+        let _class = self.resolve_class(&method_type_identifier)?;
 
         bail!("TODO: method handle resolution")
     }
@@ -734,7 +725,7 @@ impl Jvm {
                 }
                 "desiredAssertionStatus0" => Ok(Some(FrameValue::Int(0))),
                 "getPrimitiveClass" => {
-                    let operand = operands.get(0).context("operands are empty")?;
+                    let operand = operands.first().context("operands are empty")?;
                     let heap_id =
                         if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = operand {
                             heap_id
@@ -863,7 +854,6 @@ impl From<FrameValue> for FieldValue {
         match value {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
-            FrameValue::ReturnAddress => todo!(),
         }
     }
 }
@@ -883,7 +873,7 @@ impl From<FieldValue> for FrameValue {
 
 /// Identifies a class using package and name
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct ClassIdentifier {
+pub struct ClassIdentifier {
     is_array: bool,
     package: String,
     name: String,
@@ -961,7 +951,7 @@ impl Debug for ClassIdentifier {
 }
 
 #[derive(Debug, Clone)]
-enum ReferenceValue {
+pub enum ReferenceValue {
     HeapItem(HeapId),
     Class(ClassIdentifier),
     Null,
