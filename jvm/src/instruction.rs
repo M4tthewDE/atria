@@ -44,6 +44,7 @@ pub enum Instruction {
     Newarray(u8),
     Castore,
     Bastore,
+    Iastore,
 }
 
 impl Instruction {
@@ -71,6 +72,7 @@ impl Instruction {
             0x4b => Instruction::Astore(0),
             0x4c => Instruction::Astore(1),
             0x4d => Instruction::Astore(2),
+            0x4f => Instruction::Iastore,
             0x4e => Instruction::Astore(3),
             0x53 => Instruction::Aastore,
             0x54 => Instruction::Bastore,
@@ -128,6 +130,7 @@ impl Instruction {
             Self::Newarray(_) => 2,
             Self::Castore => 1,
             Self::Bastore => 1,
+            Self::Iastore => 1,
         }
     }
 }

@@ -207,6 +207,7 @@ impl Jvm {
                 Instruction::Newarray(atype) => self.new_array(atype)?,
                 Instruction::Castore => self.castore()?,
                 Instruction::Bastore => self.bastore()?,
+                Instruction::Iastore => self.iastore()?,
             }
 
             match instruction {
@@ -238,6 +239,22 @@ impl Jvm {
         };
 
         self.heap.store_into_primitive_array(heap_id, index, value)
+    }
+
+    fn iastore(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        let index = self.stack.pop_operand()?;
+        let array_ref = self.stack.pop_operand()?;
+
+        if !array_ref.is_reference() && self.is_array(&array_ref)? {
+            bail!("arrayref has to be a reference to an array, is {array_ref:?}")
+        }
+
+        let index = index.int()? as usize;
+        let heap_id = array_ref.reference()?.heap_id()?;
+
+        self.heap
+            .store_into_primitive_array(heap_id, index, PrimitiveArrayValue::Int(value.int()?))
     }
 
     fn castore(&mut self) -> Result<()> {
