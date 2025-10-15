@@ -54,6 +54,7 @@ pub enum Instruction {
     Sipush(u16),
     Lreturn,
     Istore(u8),
+    Isub,
 }
 
 impl Instruction {
@@ -92,6 +93,7 @@ impl Instruction {
             0x54 => Instruction::Bastore,
             0x55 => Instruction::Castore,
             0x59 => Instruction::Dup,
+            0x64 => Instruction::Isub,
             0x9a => Instruction::IfNe(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
@@ -149,6 +151,7 @@ impl Instruction {
             Self::Sipush(_) => 3,
             Self::Lreturn => 1,
             Self::Istore(_) => 1,
+            Self::Isub => 1,
         }
     }
 }
