@@ -183,6 +183,12 @@ impl Jvm {
                 Instruction::New(ref index) => self.new_instruction(index)?,
                 Instruction::Dup => self.dup()?,
                 Instruction::InvokeSpecial(ref index) => self.invoke_special(index)?,
+                Instruction::Areturn => {
+                    let object_ref = self.stack.pop_operand()?;
+                    self.stack.pop()?;
+                    self.stack.push_operand(object_ref)?;
+                    break;
+                }
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
