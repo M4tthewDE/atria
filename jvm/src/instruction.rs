@@ -13,6 +13,12 @@ fn offset(bytes: &[u8]) -> Result<i16> {
     Ok((byte1 as i16) << 8 | byte2 as i16)
 }
 
+fn short(bytes: &[u8]) -> Result<u16> {
+    let byte1 = *bytes.get(1).context("premature end of code")?;
+    let byte2 = *bytes.get(2).context("premature end of code")?;
+    Ok((byte1 as u16) << 8 | byte2 as u16)
+}
+
 #[derive(Debug, Clone)]
 pub enum Instruction {
     Iconst(i8),
@@ -45,6 +51,7 @@ pub enum Instruction {
     Castore,
     Bastore,
     Iastore,
+    Sipush(u16),
 }
 
 impl Instruction {
@@ -59,6 +66,7 @@ impl Instruction {
             0x7 => Instruction::Iconst(4),
             0x8 => Instruction::Iconst(5),
             0x10 => Instruction::Bipush(*bytes.get(1).context("premature end of code")?),
+            0x11 => Instruction::Sipush(short(bytes)?),
             0x12 => Instruction::Ldc((*bytes.get(1).context("premature end of code")?).into()),
             0x13 => Instruction::LdcW(cp_index(bytes)?),
             0x1a => Instruction::Iload(0),
@@ -131,6 +139,7 @@ impl Instruction {
             Self::Castore => 1,
             Self::Bastore => 1,
             Self::Iastore => 1,
+            Self::Sipush(_) => 3,
         }
     }
 }

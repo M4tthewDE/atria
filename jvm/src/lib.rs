@@ -208,6 +208,9 @@ impl Jvm {
                 Instruction::Castore => self.castore()?,
                 Instruction::Bastore => self.bastore()?,
                 Instruction::Iastore => self.iastore()?,
+                Instruction::Sipush(value) => {
+                    self.stack.push_operand(FrameValue::Int(value.into()))?
+                }
             }
 
             match instruction {
