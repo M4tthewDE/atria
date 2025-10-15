@@ -14,7 +14,7 @@ use crate::{
     util::u2,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Method {
     pub access_flags: HashSet<AccessFlag>,
     pub name_index: CpIndex,

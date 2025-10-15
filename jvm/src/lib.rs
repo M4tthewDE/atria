@@ -157,13 +157,9 @@ impl Jvm {
         Ok(())
     }
 
-    #[instrument(skip(self), fields(class = %self.stack.current_class()?))]
+    #[instrument(skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
-        debug!(
-            "running {} in {:?}",
-            self.stack.method_name()?,
-            self.stack.current_class()?
-        );
+        debug!("running {}", self.stack.method_name()?,);
         loop {
             let instruction = self.stack.current_instruction()?;
             debug!("executing {instruction:?}");
@@ -186,6 +182,7 @@ impl Jvm {
                 Instruction::IfNull(offset) => self.if_null(offset)?,
                 Instruction::New(ref index) => self.new_instruction(index)?,
                 Instruction::Dup => self.dup()?,
+                Instruction::InvokeSpecial(ref index) => self.invoke_special(index)?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -410,6 +407,61 @@ impl Jvm {
         let operand = self.stack.pop_operand()?;
         self.stack.push_operand(operand.clone())?;
         self.stack.push_operand(operand)
+    }
+
+    fn invoke_special(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+        let (class_index, name_and_type_index) = if let CpInfo::MethodRef {
+            class_index,
+            name_and_type_index,
+        } = current_class.cp_item(index)?
+        {
+            (class_index, name_and_type_index)
+        } else {
+            bail!("no method reference at index {index:?}")
+        };
+
+        let class_identifier = current_class.class_identifier(class_index)?;
+        let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+        let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+
+        if !Self::is_instance_initialization_method(method_name, descriptor) {
+            bail!("TODO: invokespecial for non instance initialization methods")
+        }
+
+        let class = self.initialize(&class_identifier)?;
+
+        if class.contains_method(&method) {
+            if method.is_synchronized() {
+                bail!("TODO: invokespecial synchronized method")
+            }
+
+            if method.is_native() {
+                bail!("TODO: invokespecial native method")
+            }
+
+            let method_descriptor = class.method_descriptor(&method)?;
+            let operands = self
+                .stack
+                .pop_operands(method_descriptor.parameters.len() + 1)?;
+            let code = method
+                .code()
+                .context(format!("no code found for {method_name} method"))?
+                .to_vec();
+            self.stack.push(
+                method_name.to_string(),
+                operands,
+                code,
+                class.identifier().clone(),
+            );
+            self.execute()
+        } else {
+            bail!("TODO: invokespecial method lookup")
+        }
+    }
+
+    fn is_instance_initialization_method(name: &str, descriptor: &str) -> bool {
+        name == "<init>" && descriptor == "()V"
     }
 
     fn run_native_method(
@@ -640,7 +692,7 @@ mod tests {
     #[test]
     fn system() -> Result<()> {
         tracing_subscriber::registry()
-            .with(fmt::layer().with_file(true).with_line_number(true))
+            .with(fmt::layer())
             .with(EnvFilter::from_default_env())
             .init();
 

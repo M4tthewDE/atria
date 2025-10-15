@@ -27,6 +27,7 @@ pub enum Instruction {
     InvokeDynamic(CpIndex),
     New(CpIndex),
     Dup,
+    InvokeSpecial(CpIndex),
 }
 
 impl Instruction {
@@ -55,6 +56,7 @@ impl Instruction {
             0xb3 => Instruction::PutStatic(cp_index(bytes)),
             0xb4 => Instruction::GetField(cp_index(bytes)),
             0xb6 => Instruction::InvokeVirtual(cp_index(bytes)),
+            0xb7 => Instruction::InvokeSpecial(cp_index(bytes)),
             0xb8 => Instruction::InvokeStatic(cp_index(bytes)),
             0xba => Instruction::InvokeDynamic(cp_index(bytes)),
             0xbb => Instruction::New(cp_index(bytes)),
@@ -82,6 +84,7 @@ impl Instruction {
             Self::InvokeDynamic(_) => 5,
             Self::New(_) => 3,
             Self::Dup => 1,
+            Self::InvokeSpecial(_) => 3,
         }
     }
 }

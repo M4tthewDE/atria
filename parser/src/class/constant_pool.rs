@@ -7,7 +7,7 @@ use tracing::trace;
 use crate::util::{f4, i4, u1, u2, u8, utf8};
 
 /// A valid index into the constant pool.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CpIndex(pub u16);
 
 impl From<u16> for CpIndex {

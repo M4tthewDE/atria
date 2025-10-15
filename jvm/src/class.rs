@@ -165,6 +165,10 @@ impl Class {
     pub fn fields(&self) -> &Vec<Field> {
         &self.class_file.fields
     }
+
+    pub fn contains_method(&self, method: &Method) -> bool {
+        self.class_file.methods.contains(method)
+    }
 }
 
 #[derive(Clone, Debug)]
