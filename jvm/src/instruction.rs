@@ -57,6 +57,7 @@ pub enum Instruction {
     Isub,
     Iand,
     Ifeq(i16),
+    Goto(i16),
 }
 
 impl Instruction {
@@ -101,6 +102,7 @@ impl Instruction {
             0x9a => Instruction::IfNe(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
+            0xa7 => Instruction::Goto(offset(bytes)?),
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
             0xb2 => Instruction::GetStatic(cp_index(bytes)?),
@@ -158,6 +160,7 @@ impl Instruction {
             Self::Isub => 1,
             Self::Iand => 1,
             Self::Ifeq(_) => 3,
+            Self::Goto(_) => 3,
         }
     }
 }

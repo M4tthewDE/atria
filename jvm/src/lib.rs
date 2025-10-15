@@ -268,13 +268,15 @@ impl Jvm {
                 Instruction::Isub => self.isub()?,
                 Instruction::Iand => self.iand()?,
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
+                Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
             }
 
             match instruction {
                 Instruction::IfNull(_)
                 | Instruction::IfNe(_)
                 | Instruction::IfNonNull(_)
-                | Instruction::Ifeq(_) => {}
+                | Instruction::Ifeq(_)
+                | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
