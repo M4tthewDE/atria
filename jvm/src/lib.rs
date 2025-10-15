@@ -391,6 +391,7 @@ impl Jvm {
                 let object_id = self.new_string(value.to_string())?;
                 FrameValue::Reference(ReferenceValue::HeapItem(object_id))
             }
+            CpInfo::Integer(value) => FrameValue::Int(*value),
             info => bail!("item {info:?} at index {index:?} is not loadable"),
         };
 
