@@ -270,6 +270,11 @@ impl Jvm {
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
                 Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
                 Instruction::Ifgt(offset) => self.if_gt(offset)?,
+                Instruction::Fload(index) => self.fload(index)?,
+                Instruction::Fconst(val) => self.stack.push_operand(FrameValue::Float(val))?,
+                Instruction::Fcmpl => self.fcmpl()?,
+                Instruction::Ifle(offset) => self.if_le(offset)?,
+                Instruction::Iflt(offset) => self.if_lt(offset)?,
             }
 
             match instruction {
@@ -277,12 +282,30 @@ impl Jvm {
                 | Instruction::IfNe(_)
                 | Instruction::IfNonNull(_)
                 | Instruction::Ifeq(_)
+                | Instruction::Ifle(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
 
         Ok(())
+    }
+
+    fn fcmpl(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.float()?;
+        let value1 = self.stack.pop_operand()?.float()?;
+
+        let value = if value1 > value2 {
+            FrameValue::Int(1)
+        } else if value1 == value2 {
+            FrameValue::Int(0)
+        } else if value1 < value2 {
+            FrameValue::Int(-1)
+        } else {
+            FrameValue::Int(-1)
+        };
+
+        self.stack.push_operand(value)
     }
 
     fn iand(&mut self) -> Result<()> {
@@ -396,6 +419,14 @@ impl Jvm {
         self.heap.store_into_reference_array(heap_id, index, value)
     }
 
+    fn fload(&mut self, index: u8) -> Result<()> {
+        let value = self.stack.local_variable(index.into())?;
+        if value.float().is_err() {
+            bail!("value has to be float, is {value:?}");
+        }
+        self.stack.push_operand(value)
+    }
+
     fn iload(&mut self, index: u8) -> Result<()> {
         let value = self.stack.local_variable(index.into())?;
 
@@ -430,6 +461,24 @@ impl Jvm {
         let field_value = class.get_field_value(&name)?;
 
         self.stack.push_operand(field_value.into())
+    }
+
+    fn if_lt(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if operand.int()? < 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_le(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if operand.int()? <= 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
     }
 
     fn if_gt(&mut self, offset: i16) -> Result<()> {
@@ -498,6 +547,7 @@ impl Jvm {
                 FrameValue::Reference(ReferenceValue::HeapItem(object_id))
             }
             CpInfo::Integer(value) => FrameValue::Int(*value),
+            CpInfo::Float(value) => FrameValue::Float(*value),
             info => bail!("item {info:?} at index {index:?} is not loadable"),
         };
 
@@ -667,7 +717,6 @@ impl Jvm {
 
     fn new_instruction(&mut self, index: &CpIndex) -> Result<()> {
         let current_class = self.current_class()?;
-
         let class_identifier = current_class.class_identifier(index)?;
         let class = self.resolve_class(&class_identifier)?;
         let fields = self.default_instance_fields(&class)?;
@@ -871,6 +920,11 @@ impl Jvm {
                 "objectFieldOffset1" => Ok(Some(FrameValue::Long(0))),
                 _ => bail!("native method not implemented"),
             }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.Thread")? {
+            match name {
+                "registerNatives" => Ok(None),
+                _ => bail!("native method not implemented"),
+            }
         } else {
             bail!("native method not implemented")
         }
@@ -998,6 +1052,7 @@ impl From<FrameValue> for FieldValue {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
             FrameValue::Long(val) => Self::Long(val),
+            FrameValue::Float(val) => Self::Float(val),
         }
     }
 }

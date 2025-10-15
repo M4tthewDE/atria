@@ -204,6 +204,7 @@ pub enum FrameValue {
     Reference(ReferenceValue),
     Int(i32),
     Long(i64),
+    Float(f32),
 }
 
 impl FrameValue {
@@ -230,11 +231,20 @@ impl FrameValue {
             bail!("frame value is not a int")
         }
     }
+
     pub fn long(&self) -> Result<i64> {
         if let Self::Long(long) = self {
             Ok(*long)
         } else {
             bail!("frame value is not a long")
+        }
+    }
+
+    pub fn float(&self) -> Result<f32> {
+        if let Self::Float(float) = self {
+            Ok(*float)
+        } else {
+            bail!("frame value is not a float")
         }
     }
 }
