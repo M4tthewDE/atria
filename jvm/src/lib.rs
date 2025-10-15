@@ -299,8 +299,8 @@ impl Jvm {
         self.initialize(&array_class)?;
         let length = self.stack.pop_int()?;
         let array = FrameValue::Reference(ReferenceValue::Array(
-            array_class,
-            vec![ReferenceValue::Null; length as usize],
+            ArrayType::Reference(array_class),
+            vec![ArrayValue::Reference(ReferenceValue::Null); length as usize],
         ));
         self.stack.push_operand(array)
     }
@@ -487,7 +487,15 @@ impl Jvm {
 
                 let fields = self.default_instance_fields(&class)?;
                 let object_id = self.heap.allocate(class.identifier().clone(), fields);
-                bail!("TODO: set the value of the string!");
+                let bytes = format!("{identifier:?}")
+                    .into_bytes()
+                    .iter()
+                    .map(|b| ArrayValue::Byte(*b))
+                    .collect();
+                let byte_array =
+                    FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
+                self.heap
+                    .set_field(&object_id, "value", byte_array.into())?;
                 return Ok(Some(FrameValue::Reference(ReferenceValue::Object(
                     object_id,
                 ))));
@@ -677,8 +685,20 @@ impl Debug for ClassIdentifier {
 enum ReferenceValue {
     Object(ObjectId),
     Class(ClassIdentifier),
-    Array(ClassIdentifier, Vec<ReferenceValue>),
+    Array(ArrayType, Vec<ArrayValue>),
     Null,
+}
+
+#[derive(Debug, Clone)]
+enum ArrayType {
+    Reference(ClassIdentifier),
+    Byte,
+}
+
+#[derive(Debug, Clone)]
+enum ArrayValue {
+    Reference(ReferenceValue),
+    Byte(u8),
 }
 
 #[cfg(test)]

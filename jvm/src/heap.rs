@@ -1,5 +1,7 @@
+use anyhow::Result;
 use std::collections::HashMap;
 
+use anyhow::Context;
 use tracing::debug;
 
 use crate::{ClassIdentifier, class::FieldValue};
@@ -48,5 +50,14 @@ impl Heap {
         debug!("allocated {object:?} with id {id:?}");
 
         id
+    }
+
+    pub fn set_field(&mut self, object_id: &ObjectId, name: &str, value: FieldValue) -> Result<()> {
+        let object = self
+            .objects
+            .get_mut(object_id)
+            .context(format!("field '{name}' not found on object {object_id:?}"))?;
+        object.fields.insert(name.to_string(), value);
+        Ok(())
     }
 }
