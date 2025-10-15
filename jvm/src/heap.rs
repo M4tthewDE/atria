@@ -42,21 +42,79 @@ pub enum HeapItem {
         class: ClassIdentifier,
         values: Vec<ReferenceValue>,
     },
-    PrimitiveArray(Vec<PrimitiveArrayValue>),
+    PrimitiveArray(PrimitiveArrayType, Vec<PrimitiveArrayValue>),
 }
 
 impl HeapItem {
     pub fn is_array(&self) -> bool {
         match self {
             Self::Object(_) => false,
-            Self::ReferenceArray { .. } | Self::PrimitiveArray(_) => true,
+            Self::ReferenceArray { .. } | Self::PrimitiveArray(_, _) => true,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PrimitiveArrayType {
+    Boolean,
+    Char,
+    Float,
+    Double,
+    Byte,
+    Short,
+    Int,
+    Long,
+}
+
+impl PrimitiveArrayType {
+    pub fn new(atype: u8) -> Result<Self> {
+        Ok(match atype {
+            4 => PrimitiveArrayType::Boolean,
+            5 => PrimitiveArrayType::Char,
+            6 => PrimitiveArrayType::Float,
+            7 => PrimitiveArrayType::Double,
+            8 => PrimitiveArrayType::Byte,
+            9 => PrimitiveArrayType::Short,
+            10 => PrimitiveArrayType::Int,
+            11 => PrimitiveArrayType::Long,
+            _ => bail!("invalid array type: {atype}"),
+        })
+    }
+
+    fn default(&self) -> PrimitiveArrayValue {
+        match self {
+            Self::Boolean => PrimitiveArrayValue::Boolean(false),
+            Self::Char => PrimitiveArrayValue::Char(0),
+            Self::Float => PrimitiveArrayValue::Float(0.0),
+            Self::Double => PrimitiveArrayValue::Double(0.0),
+            Self::Byte => PrimitiveArrayValue::Byte(0),
+            Self::Short => PrimitiveArrayValue::Short(0),
+            Self::Int => PrimitiveArrayValue::Int(0),
+            Self::Long => PrimitiveArrayValue::Long(0),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum PrimitiveArrayValue {
+    Boolean(bool),
+    Char(u8),
+    Float(f32),
+    Double(f64),
     Byte(u8),
+    Short(u16),
+    Int(i32),
+    Long(i64),
+}
+
+impl PrimitiveArrayValue {
+    pub fn byte(&self) -> Result<u8> {
+        if let Self::Byte(val) = self {
+            Ok(*val)
+        } else {
+            bail!("value is not a byte, is {self:?}")
+        }
+    }
 }
 
 #[derive(Default)]
@@ -96,14 +154,26 @@ impl Heap {
         id
     }
 
-    pub fn allocate_primitive_array(&mut self, values: Vec<PrimitiveArrayValue>) -> HeapId {
-        let heap_item = HeapItem::PrimitiveArray(values);
+    pub fn allocate_primitive_array(
+        &mut self,
+        array_type: PrimitiveArrayType,
+        values: Vec<PrimitiveArrayValue>,
+    ) -> HeapId {
+        let heap_item = HeapItem::PrimitiveArray(array_type, values);
         let id: HeapId = self.current_id.into();
         self.items.insert(id.clone(), heap_item.clone());
         self.current_id += 1;
 
         debug!("allocated {heap_item:?} with id {id:?}");
         id
+    }
+    pub fn allocate_default_primitive_array(
+        &mut self,
+        array_type: PrimitiveArrayType,
+        count: usize,
+    ) -> HeapId {
+        let items = vec![array_type.default(); count];
+        self.allocate_primitive_array(array_type, items)
     }
 
     pub fn set_field(&mut self, object_id: &HeapId, name: &str, value: FieldValue) -> Result<()> {
@@ -168,7 +238,7 @@ impl Heap {
             .context(format!("unknown object with {id:?}"))?;
 
         match item {
-            HeapItem::PrimitiveArray(primitive_array_values) => Ok(primitive_array_values),
+            HeapItem::PrimitiveArray(_, primitive_array_values) => Ok(primitive_array_values),
             _ => bail!("object at {id:?} is not a primitive array, is {item:?}"),
         }
     }

@@ -41,6 +41,7 @@ pub enum Instruction {
     AconstNull,
     Aastore,
     Bipush(u8),
+    Newarray(u8),
 }
 
 impl Instruction {
@@ -54,8 +55,8 @@ impl Instruction {
             0x6 => Instruction::Iconst(3),
             0x7 => Instruction::Iconst(4),
             0x8 => Instruction::Iconst(5),
-            0x10 => Instruction::Bipush(bytes[1]),
-            0x12 => Instruction::Ldc(bytes[1].into()),
+            0x10 => Instruction::Bipush(*bytes.get(1).context("premature end of code")?),
+            0x12 => Instruction::Ldc((*bytes.get(1).context("premature end of code")?).into()),
             0x13 => Instruction::LdcW(cp_index(bytes)?),
             0x1a => Instruction::Iload(0),
             0x1b => Instruction::Iload(1),
@@ -84,6 +85,7 @@ impl Instruction {
             0xb8 => Instruction::InvokeStatic(cp_index(bytes)?),
             0xba => Instruction::InvokeDynamic(cp_index(bytes)?),
             0xbb => Instruction::New(cp_index(bytes)?),
+            0xbc => Instruction::Newarray(*bytes.get(1).context("premature end of code")?),
             0xbd => Instruction::Anewarray(cp_index(bytes)?),
             0xc6 => Instruction::IfNull(offset(bytes)?),
             0xc7 => Instruction::IfNonNull(offset(bytes)?),
@@ -119,6 +121,7 @@ impl Instruction {
             Self::AconstNull => 1,
             Self::Aastore => 1,
             Self::Bipush(_) => 2,
+            Self::Newarray(_) => 2,
         }
     }
 }

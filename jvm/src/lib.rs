@@ -11,7 +11,7 @@ use parser::class::{
 use tracing::{debug, instrument};
 use zip::ZipArchive;
 
-use crate::heap::{Heap, HeapId, PrimitiveArrayValue};
+use crate::heap::{Heap, HeapId, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,
@@ -204,6 +204,7 @@ impl Jvm {
                 Instruction::Bipush(value) => {
                     self.stack.push_operand(FrameValue::Int(value.into()))?
                 }
+                Instruction::Newarray(atype) => self.new_array(atype)?,
             }
 
             match instruction {
@@ -213,6 +214,21 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn new_array(&mut self, atype: u8) -> Result<()> {
+        let array_type = PrimitiveArrayType::new(atype)?;
+        let count = self.stack.pop_operand()?.int()?;
+
+        if count < 0 {
+            bail!("TODO: throw NegativeArraySizeException");
+        }
+
+        let heap_id = self
+            .heap
+            .allocate_default_primitive_array(array_type, count.try_into()?);
+        self.stack
+            .push_operand(FrameValue::Reference(ReferenceValue::HeapItem(heap_id)))
     }
 
     fn is_array(&self, value: &FrameValue) -> Result<bool> {
@@ -626,10 +642,8 @@ impl Jvm {
 
                     let bytes: Vec<u8> = primitive_array
                         .iter()
-                        .map(|p| match p {
-                            PrimitiveArrayValue::Byte(b) => *b,
-                        })
-                        .collect();
+                        .map(|p| p.byte())
+                        .collect::<Result<Vec<u8>>>()?;
                     let name = String::from_utf8(bytes)?;
                     match name.as_str() {
                         "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
@@ -664,7 +678,9 @@ impl Jvm {
             .iter()
             .map(|b| PrimitiveArrayValue::Byte(*b))
             .collect();
-        let heap_item = self.heap.allocate_primitive_array(bytes);
+        let heap_item = self
+            .heap
+            .allocate_primitive_array(PrimitiveArrayType::Byte, bytes);
         let byte_array = FrameValue::Reference(ReferenceValue::HeapItem(heap_item));
         self.heap
             .set_field(&object_id, "value", byte_array.into())?;
