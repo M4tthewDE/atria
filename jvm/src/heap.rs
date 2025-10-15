@@ -38,7 +38,7 @@ pub enum HeapItem {
         class: ClassIdentifier,
         values: Vec<ReferenceValue>,
     },
-    PrimitiveArray(Vec<ArrayValue>),
+    PrimitiveArray(Vec<PrimitiveArrayValue>),
 }
 
 impl HeapItem {
@@ -51,7 +51,7 @@ impl HeapItem {
 }
 
 #[derive(Debug, Clone)]
-pub enum ArrayValue {
+pub enum PrimitiveArrayValue {
     Byte(u8),
 }
 
@@ -92,7 +92,7 @@ impl Heap {
         id
     }
 
-    pub fn allocate_primitive_array(&mut self, values: Vec<ArrayValue>) -> HeapId {
+    pub fn allocate_primitive_array(&mut self, values: Vec<PrimitiveArrayValue>) -> HeapId {
         let heap_item = HeapItem::PrimitiveArray(values);
         let id: HeapId = self.current_id.into();
         self.items.insert(id.clone(), heap_item.clone());
@@ -118,6 +118,22 @@ impl Heap {
         }
     }
 
+    pub fn get_field(&mut self, id: &HeapId, name: &str) -> Result<FieldValue> {
+        let item = self
+            .items
+            .get(id)
+            .context(format!("unknown object with {id:?}"))?;
+
+        match item {
+            HeapItem::Object(object) => object
+                .fields
+                .get(name)
+                .context("no field with name '{name}' found")
+                .cloned(),
+            _ => bail!("item at {id:?} is no object, but {item:?}"),
+        }
+    }
+
     pub fn get(&self, id: &HeapId) -> Result<&HeapItem> {
         self.items.get(id).context("no heap item at id {id}")
     }
@@ -139,5 +155,17 @@ impl Heap {
         }
 
         Ok(())
+    }
+
+    pub fn get_primitive_array(&self, id: &HeapId) -> Result<&Vec<PrimitiveArrayValue>> {
+        let item = self
+            .items
+            .get(id)
+            .context(format!("unknown object with {id:?}"))?;
+
+        match item {
+            HeapItem::PrimitiveArray(primitive_array_values) => Ok(primitive_array_values),
+            _ => bail!("object at {id:?} is not a primitive array, is {item:?}"),
+        }
     }
 }

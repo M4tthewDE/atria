@@ -10,7 +10,7 @@ use parser::class::{
 };
 use tracing::trace;
 
-use crate::{ClassIdentifier, ReferenceValue};
+use crate::{ClassIdentifier, ReferenceValue, heap::HeapId};
 
 #[derive(Clone)]
 pub struct Class {
@@ -180,6 +180,15 @@ pub enum FieldValue {
     Long(u64),
     Float(f32),
     Double(f64),
+}
+
+impl FieldValue {
+    pub fn heap_id(&self) -> Result<&HeapId> {
+        match self {
+            FieldValue::Reference(reference_value) => reference_value.heap_id(),
+            _ => bail!("no heap id found"),
+        }
+    }
 }
 
 impl From<FieldDescriptor> for FieldValue {

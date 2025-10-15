@@ -11,7 +11,7 @@ use parser::class::{
 use tracing::{debug, instrument};
 use zip::ZipArchive;
 
-use crate::heap::{ArrayValue, Heap, HeapId};
+use crate::heap::{Heap, HeapId, PrimitiveArrayValue};
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,
@@ -313,8 +313,10 @@ impl Jvm {
             bail!("no field reference at index {index:?}")
         };
 
-        let (name, _) = current_class.name_and_type(name_and_type_index)?;
+        let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
         let class_identifier = current_class.class_identifier(class_index)?;
+        self.resolve_field(&class_identifier, name, descriptor)?;
+
         let class = self.class(&class_identifier)?;
         let field_value = class.get_field_value(name)?;
         self.stack.push_operand(field_value.into())
@@ -731,6 +733,33 @@ impl Jvm {
                     }
                 }
                 "desiredAssertionStatus0" => Ok(Some(FrameValue::Int(0))),
+                "getPrimitiveClass" => {
+                    let operand = operands.get(0).context("operands are empty")?;
+                    let heap_id =
+                        if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = operand {
+                            heap_id
+                        } else {
+                            bail!("no reference found, instead: {operand:?}")
+                        };
+
+                    let value_heap_item = self.heap.get_field(heap_id, "value")?;
+                    let primitive_array =
+                        self.heap.get_primitive_array(value_heap_item.heap_id()?)?;
+
+                    let bytes: Vec<u8> = primitive_array
+                        .iter()
+                        .map(|p| match p {
+                            PrimitiveArrayValue::Byte(b) => *b,
+                        })
+                        .collect();
+                    let name = String::from_utf8(bytes)?;
+                    match name.as_str() {
+                        "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Integer".to_string())?,
+                        )))),
+                        _ => bail!("invalid primitve class name: '{name}'"),
+                    }
+                }
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("java.lang.Runtime".to_string())? {
@@ -755,7 +784,7 @@ impl Jvm {
         let bytes = value
             .into_bytes()
             .iter()
-            .map(|b| ArrayValue::Byte(*b))
+            .map(|b| PrimitiveArrayValue::Byte(*b))
             .collect();
         let heap_item = self.heap.allocate_primitive_array(bytes);
         let byte_array = FrameValue::Reference(ReferenceValue::HeapItem(heap_item));
@@ -936,6 +965,15 @@ enum ReferenceValue {
     HeapItem(HeapId),
     Class(ClassIdentifier),
     Null,
+}
+
+impl ReferenceValue {
+    pub fn heap_id(&self) -> Result<&HeapId> {
+        match self {
+            ReferenceValue::HeapItem(heap_id) => Ok(heap_id),
+            _ => bail!("no heap id found"),
+        }
+    }
 }
 
 #[cfg(test)]
