@@ -10,7 +10,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 use zip::ZipArchive;
 
 use crate::heap::{Heap, HeapId, PrimitiveArrayType, PrimitiveArrayValue};
@@ -100,7 +100,7 @@ impl Jvm {
 
         let mut class = Class::new(identifier.clone(), class_file);
         class.initializing();
-        class.initialize_static_fields()?;
+        self.initialize_static_fields(&mut class)?;
 
         let class_identifier = ClassIdentifier::new("java.lang.Class")?;
         if identifier != &class_identifier {
@@ -130,6 +130,53 @@ impl Jvm {
             .finished_initialization();
         debug!("initialized {identifier:?}");
         Ok(class)
+    }
+
+    pub fn initialize_static_fields(&mut self, class: &mut Class) -> Result<()> {
+        for field in &class.fields().clone() {
+            if field.is_static_final() {
+                self.initialize_static_final_field(class, field)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn initialize_static_final_field(
+        &mut self,
+        class: &mut Class,
+        field: &Field,
+    ) -> Result<()> {
+        let name = class.utf8(&field.name_index)?.to_string();
+
+        trace!("initializing field {name}");
+
+        let field_value = if let Some(constant_value_index) = field.get_constant_value_index() {
+            self.resolve_constant_value(class, constant_value_index)?
+        } else {
+            FieldDescriptor::new(class.utf8(&field.descriptor_index)?)?.into()
+        };
+
+        class.set_field(&name, field_value)
+    }
+
+    fn resolve_constant_value(
+        &mut self,
+        class: &Class,
+        constant_value_index: &CpIndex,
+    ) -> Result<FieldValue> {
+        Ok(match class.cp_item(constant_value_index)? {
+            CpInfo::String { string_index } => {
+                let value = class.utf8(string_index)?;
+                let heap_id = self.new_string(value.to_string())?;
+                FieldValue::Reference(ReferenceValue::HeapItem(heap_id))
+            }
+            CpInfo::Integer(val) => FieldValue::Integer(*val),
+            CpInfo::Long(val) => FieldValue::Long(*val),
+            CpInfo::Float(val) => FieldValue::Float(*val),
+            CpInfo::Double(val) => FieldValue::Double(*val),
+            item => bail!("invalid constant pool item: {item:?}"),
+        })
     }
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
@@ -754,6 +801,7 @@ impl Jvm {
             match name {
                 "registerNatives" => Ok(None),
                 "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
+                "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
                 _ => bail!("native method not implemented"),
             }
         } else {
@@ -890,8 +938,7 @@ impl From<FieldValue> for FrameValue {
     fn from(value: FieldValue) -> Self {
         match value {
             FieldValue::Reference(reference_value) => Self::Reference(reference_value),
-            FieldValue::String(_) => todo!(),
-            FieldValue::Integer(_) => todo!(),
+            FieldValue::Integer(val) => Self::Int(val),
             FieldValue::Long(_) => todo!(),
             FieldValue::Float(_) => todo!(),
             FieldValue::Double(_) => todo!(),

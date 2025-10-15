@@ -440,6 +440,7 @@ pub enum VerificationType {
     Top,
     Integer,
     Float,
+    Double,
     Long,
     Object(CpIndex),
 }
@@ -452,6 +453,7 @@ impl VerificationType {
             0 => Self::Top,
             1 => Self::Integer,
             2 => Self::Float,
+            3 => Self::Double,
             4 => Self::Long,
             7 => Self::Object(u2(r)?.into()),
             _ => bail!("invalid verification type tag: {tag}"),

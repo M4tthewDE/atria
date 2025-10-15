@@ -38,6 +38,12 @@ pub fn f4(r: &mut impl Read) -> Result<f32> {
     Ok(f32::from_be_bytes(buf))
 }
 
+pub fn f8(r: &mut impl Read) -> Result<f64> {
+    let mut buf = [0; 8];
+    r.read_exact(&mut buf)?;
+    Ok(f64::from_be_bytes(buf))
+}
+
 pub fn utf8(r: &mut impl Read, length: usize) -> Result<String> {
     let mut buf = vec![0; length];
     r.read_exact(&mut buf)?;
