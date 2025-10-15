@@ -167,6 +167,7 @@ impl Heap {
         debug!("allocated {heap_item:?} with id {id:?}");
         id
     }
+
     pub fn allocate_default_primitive_array(
         &mut self,
         array_type: PrimitiveArrayType,

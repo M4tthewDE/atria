@@ -963,12 +963,12 @@ impl Jvm {
                 field_name.to_string(),
                 FieldDescriptor::new(descriptor)?.into(),
             );
+        }
 
-            if class.has_super_class() {
-                let super_class = self.initialize(&class.super_class()?)?;
-                let super_class_fields = self.default_instance_fields(&super_class)?;
-                fields.extend(super_class_fields.into_iter());
-            }
+        if class.has_super_class() {
+            let super_class = self.initialize(&class.super_class()?)?;
+            let super_class_fields = self.default_instance_fields(&super_class)?;
+            fields.extend(super_class_fields.into_iter());
         }
 
         Ok(fields)
