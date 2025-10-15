@@ -93,6 +93,15 @@ impl Stack {
             .context("no frame found")?
             .method_descriptor())
     }
+
+    pub fn local_variables(&self) -> Result<Vec<FrameValue>> {
+        Ok(self
+            .frames
+            .last()
+            .context("no frame found")?
+            .local_variables
+            .clone())
+    }
 }
 
 #[derive(Debug)]

@@ -203,9 +203,10 @@ impl Jvm {
     #[instrument(name = "", skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
         debug!(
-            "running {} {:?}",
+            "running {} {:?} {:?}",
             self.stack.method_name()?,
-            self.stack.method_descriptor()?
+            self.stack.method_descriptor()?,
+            self.stack.local_variables()?,
         );
         loop {
             let instruction = self.stack.current_instruction()?;
@@ -277,12 +278,15 @@ impl Jvm {
                 Instruction::Iflt(offset) => self.if_lt(offset)?,
             }
 
+            // TODO: this is very brittle
             match instruction {
                 Instruction::IfNull(_)
                 | Instruction::IfNe(_)
                 | Instruction::IfNonNull(_)
                 | Instruction::Ifeq(_)
                 | Instruction::Ifle(_)
+                | Instruction::Iflt(_)
+                | Instruction::Ifgt(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
