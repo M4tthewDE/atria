@@ -215,10 +215,6 @@ impl FrameValue {
         matches!(self, FrameValue::ReturnAddress)
     }
 
-    pub fn is_array(&self) -> bool {
-        matches!(self, FrameValue::Reference(ReferenceValue::Array(_, _)))
-    }
-
     pub fn is_null(&self) -> bool {
         matches!(self, FrameValue::Reference(ReferenceValue::Null))
     }

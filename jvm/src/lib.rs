@@ -11,7 +11,7 @@ use parser::class::{
 use tracing::{debug, instrument};
 use zip::ZipArchive;
 
-use crate::heap::{Heap, ObjectId};
+use crate::heap::{ArrayValue, Heap, HeapId};
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,
@@ -208,6 +208,7 @@ impl Jvm {
                 Instruction::AconstNull => self
                     .stack
                     .push_operand(FrameValue::Reference(ReferenceValue::Null))?,
+                Instruction::Aastore => self.aa_store()?,
                 _ => bail!("instruction {instruction:?} is not implemented"),
             }
 
@@ -218,6 +219,45 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn is_array(&self, value: &FrameValue) -> Result<bool> {
+        if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = value {
+            Ok(self.heap.get(heap_id)?.is_array())
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn aa_store(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        let index = self.stack.pop_operand()?;
+        let array_ref = self.stack.pop_operand()?;
+
+        if !array_ref.is_reference() && self.is_array(&array_ref)? {
+            bail!("arrayref has to be a reference to an array, is {array_ref:?}")
+        }
+
+        let index = if let FrameValue::Int(val) = index {
+            val
+        } else {
+            bail!("index has to be int, is {index:?}")
+        };
+
+        let value = if let FrameValue::Reference(reference) = value {
+            reference
+        } else {
+            bail!("value has to be a reference, is {array_ref:?}")
+        };
+
+        let heap_id = if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = array_ref {
+            heap_id
+        } else {
+            bail!("invalid arrayref: {array_ref:?}")
+        };
+
+        self.heap
+            .store_into_reference_array(&heap_id, index as usize, value)
     }
 
     fn iload(&mut self, index: u8) -> Result<()> {
@@ -250,11 +290,11 @@ impl Jvm {
         let value = self.stack.pop_operand()?;
         let object_ref = self.stack.pop_operand()?;
 
-        if object_ref.is_array() || !object_ref.is_reference() {
+        if self.is_array(&object_ref)? || !object_ref.is_reference() {
             bail!("object ref has to be reference but not array, is {object_ref:?}")
         }
 
-        if let FrameValue::Reference(ReferenceValue::Object(object_id)) = object_ref {
+        if let FrameValue::Reference(ReferenceValue::HeapItem(object_id)) = object_ref {
             self.heap.set_field(&object_id, name, value.into())
         } else {
             bail!("object ref has to be reference but not array, is {object_ref:?}")
@@ -318,7 +358,7 @@ impl Jvm {
             CpInfo::String { string_index } => {
                 let value = current_class.utf8(string_index)?;
                 let object_id = self.new_string(value.to_string())?;
-                FrameValue::Reference(ReferenceValue::Object(object_id))
+                FrameValue::Reference(ReferenceValue::HeapItem(object_id))
             }
             info => bail!("item {info:?} at index {index:?} is not loadable"),
         };
@@ -431,11 +471,9 @@ impl Jvm {
         let array_class = current_class.class_identifier(index)?;
         self.initialize(&array_class)?;
         let length = self.stack.pop_int()?;
-        let array = FrameValue::Reference(ReferenceValue::Array(
-            ArrayType::Reference(array_class),
-            vec![ArrayValue::Reference(ReferenceValue::Null); length as usize],
-        ));
-        self.stack.push_operand(array)
+        let array = self.heap.allocate_array(array_class, length as usize);
+        self.stack
+            .push_operand(FrameValue::Reference(ReferenceValue::HeapItem(array)))
     }
 
     fn put_static(&mut self, index: &CpIndex) -> Result<()> {
@@ -490,7 +528,7 @@ impl Jvm {
 
         self.resolve_field(&class_identifier, name, descriptor)?;
         let object_ref = self.stack.pop_operand()?;
-        if !object_ref.is_reference() || object_ref.is_array() {
+        if !object_ref.is_reference() || self.is_array(&object_ref)? {
             bail!("objectref has to be a reference but no array, is {object_ref:?}");
         }
 
@@ -546,7 +584,7 @@ impl Jvm {
         let fields = self.default_instance_fields(&class)?;
         let object_id = self.heap.allocate(class.identifier().clone(), fields);
         self.stack
-            .push_operand(FrameValue::Reference(ReferenceValue::Object(object_id)))
+            .push_operand(FrameValue::Reference(ReferenceValue::HeapItem(object_id)))
     }
 
     fn dup(&mut self) -> Result<()> {
@@ -637,7 +675,7 @@ impl Jvm {
         &mut self,
         bootstrap_method_attr_index: &CpIndex,
         name_and_type_index: &CpIndex,
-    ) -> Result<ObjectId> {
+    ) -> Result<HeapId> {
         let current_class = self.current_class()?;
 
         let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
@@ -685,7 +723,7 @@ impl Jvm {
                         operands.first().context("no operands provided")?
                     {
                         let object_id = self.new_string(format!("{identifier:?}").to_string())?;
-                        Ok(Some(FrameValue::Reference(ReferenceValue::Object(
+                        Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
                             object_id,
                         ))))
                     } else {
@@ -708,7 +746,7 @@ impl Jvm {
         }
     }
 
-    fn new_string(&mut self, value: String) -> Result<ObjectId> {
+    fn new_string(&mut self, value: String) -> Result<HeapId> {
         let string_identifier = ClassIdentifier::new("java.lang.String".to_string())?;
         let class = self.resolve_class(&string_identifier)?;
 
@@ -719,7 +757,8 @@ impl Jvm {
             .iter()
             .map(|b| ArrayValue::Byte(*b))
             .collect();
-        let byte_array = FrameValue::Reference(ReferenceValue::Array(ArrayType::Byte, bytes));
+        let heap_item = self.heap.allocate_primitive_array(bytes);
+        let byte_array = FrameValue::Reference(ReferenceValue::HeapItem(heap_item));
         self.heap
             .set_field(&object_id, "value", byte_array.into())?;
         Ok(object_id)
@@ -894,22 +933,9 @@ impl Debug for ClassIdentifier {
 
 #[derive(Debug, Clone)]
 enum ReferenceValue {
-    Object(ObjectId),
+    HeapItem(HeapId),
     Class(ClassIdentifier),
-    Array(ArrayType, Vec<ArrayValue>),
     Null,
-}
-
-#[derive(Debug, Clone)]
-enum ArrayType {
-    Reference(ClassIdentifier),
-    Byte,
-}
-
-#[derive(Debug, Clone)]
-enum ArrayValue {
-    Reference(ReferenceValue),
-    Byte(u8),
 }
 
 #[cfg(test)]

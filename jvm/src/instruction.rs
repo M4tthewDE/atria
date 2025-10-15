@@ -36,6 +36,7 @@ pub enum Instruction {
     PutField(CpIndex),
     Iload(u8),
     AconstNull,
+    Aastore,
 }
 
 impl Instruction {
@@ -63,6 +64,7 @@ impl Instruction {
             0x4c => Instruction::Astore(1),
             0x4d => Instruction::Astore(2),
             0x4e => Instruction::Astore(3),
+            0x53 => Instruction::Aastore,
             0x59 => Instruction::Dup,
             0x9a => Instruction::IfNe(offset(bytes)),
             0xa7 => Instruction::Goto(offset(bytes)),
@@ -112,6 +114,7 @@ impl Instruction {
             Self::PutField(_) => 3,
             Self::Iload(_) => 1,
             Self::AconstNull => 1,
+            Self::Aastore => 1,
         }
     }
 }
