@@ -73,6 +73,7 @@ impl Class {
             ),
             CpInfo::Integer(val) => FieldValue::Integer(*val),
             CpInfo::Long(val) => FieldValue::Long(*val),
+            CpInfo::Float(val) => FieldValue::Float(*val),
             item => bail!("invalid constant pool item: {item:?}"),
         })
     }

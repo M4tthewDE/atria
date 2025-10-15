@@ -439,6 +439,7 @@ pub struct LocalVariableTableEntry {
 pub enum VerificationType {
     Top,
     Integer,
+    Float,
     Long,
     Object(CpIndex),
 }
@@ -450,6 +451,7 @@ impl VerificationType {
         Ok(match tag {
             0 => Self::Top,
             1 => Self::Integer,
+            2 => Self::Float,
             4 => Self::Long,
             7 => Self::Object(u2(r)?.into()),
             _ => bail!("invalid verification type tag: {tag}"),
