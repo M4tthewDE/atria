@@ -1,12 +1,16 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use parser::class::constant_pool::CpIndex;
 
-fn cp_index(bytes: &[u8]) -> CpIndex {
-    ((bytes[1] as u16) << 8 | bytes[2] as u16).into()
+fn cp_index(bytes: &[u8]) -> Result<CpIndex> {
+    let byte1 = *bytes.get(1).context("premature end of code")?;
+    let byte2 = *bytes.get(2).context("premature end of code")?;
+    Ok(((byte1 as u16) << 8 | byte2 as u16).into())
 }
 
-fn offset(bytes: &[u8]) -> i16 {
-    (bytes[1] as i16) << 8 | bytes[2] as i16
+fn offset(bytes: &[u8]) -> Result<i16> {
+    let byte1 = *bytes.get(1).context("premature end of code")?;
+    let byte2 = *bytes.get(2).context("premature end of code")?;
+    Ok((byte1 as i16) << 8 | byte2 as i16)
 }
 
 #[derive(Debug, Clone)]
@@ -41,7 +45,7 @@ pub enum Instruction {
 
 impl Instruction {
     pub fn new(bytes: &[u8]) -> Result<Self> {
-        Ok(match bytes[0] {
+        Ok(match bytes.first().context("premature end of code")? {
             0x1 => Instruction::AconstNull,
             0x2 => Instruction::Iconst(-1),
             0x3 => Instruction::Iconst(0),
@@ -52,7 +56,7 @@ impl Instruction {
             0x8 => Instruction::Iconst(5),
             0x10 => Instruction::Bipush(bytes[1]),
             0x12 => Instruction::Ldc(bytes[1].into()),
-            0x13 => Instruction::LdcW(cp_index(bytes)),
+            0x13 => Instruction::LdcW(cp_index(bytes)?),
             0x1a => Instruction::Iload(0),
             0x1b => Instruction::Iload(1),
             0x1c => Instruction::Iload(2),
@@ -67,22 +71,22 @@ impl Instruction {
             0x4e => Instruction::Astore(3),
             0x53 => Instruction::Aastore,
             0x59 => Instruction::Dup,
-            0x9a => Instruction::IfNe(offset(bytes)),
+            0x9a => Instruction::IfNe(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
-            0xb2 => Instruction::GetStatic(cp_index(bytes)),
-            0xb3 => Instruction::PutStatic(cp_index(bytes)),
-            0xb4 => Instruction::GetField(cp_index(bytes)),
-            0xb5 => Instruction::PutField(cp_index(bytes)),
-            0xb6 => Instruction::InvokeVirtual(cp_index(bytes)),
-            0xb7 => Instruction::InvokeSpecial(cp_index(bytes)),
-            0xb8 => Instruction::InvokeStatic(cp_index(bytes)),
-            0xba => Instruction::InvokeDynamic(cp_index(bytes)),
-            0xbb => Instruction::New(cp_index(bytes)),
-            0xbd => Instruction::Anewarray(cp_index(bytes)),
-            0xc6 => Instruction::IfNull(offset(bytes)),
-            0xc7 => Instruction::IfNonNull(offset(bytes)),
+            0xb2 => Instruction::GetStatic(cp_index(bytes)?),
+            0xb3 => Instruction::PutStatic(cp_index(bytes)?),
+            0xb4 => Instruction::GetField(cp_index(bytes)?),
+            0xb5 => Instruction::PutField(cp_index(bytes)?),
+            0xb6 => Instruction::InvokeVirtual(cp_index(bytes)?),
+            0xb7 => Instruction::InvokeSpecial(cp_index(bytes)?),
+            0xb8 => Instruction::InvokeStatic(cp_index(bytes)?),
+            0xba => Instruction::InvokeDynamic(cp_index(bytes)?),
+            0xbb => Instruction::New(cp_index(bytes)?),
+            0xbd => Instruction::Anewarray(cp_index(bytes)?),
+            0xc6 => Instruction::IfNull(offset(bytes)?),
+            0xc7 => Instruction::IfNonNull(offset(bytes)?),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
         })
     }
