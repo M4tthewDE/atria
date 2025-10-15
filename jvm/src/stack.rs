@@ -203,6 +203,7 @@ impl Frame {
 pub enum FrameValue {
     Reference(ReferenceValue),
     Int(i32),
+    Long(i64),
 }
 
 impl FrameValue {
@@ -227,6 +228,13 @@ impl FrameValue {
             Ok(*int)
         } else {
             bail!("frame value is not a int")
+        }
+    }
+    pub fn long(&self) -> Result<i64> {
+        if let Self::Long(long) = self {
+            Ok(*long)
+        } else {
+            bail!("frame value is not a long")
         }
     }
 }

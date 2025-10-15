@@ -52,6 +52,7 @@ pub enum Instruction {
     Bastore,
     Iastore,
     Sipush(u16),
+    Lreturn,
 }
 
 impl Instruction {
@@ -88,6 +89,7 @@ impl Instruction {
             0x59 => Instruction::Dup,
             0x9a => Instruction::IfNe(offset(bytes)?),
             0xac => Instruction::Ireturn,
+            0xad => Instruction::Lreturn,
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
             0xb2 => Instruction::GetStatic(cp_index(bytes)?),
@@ -140,6 +142,7 @@ impl Instruction {
             Self::Bastore => 1,
             Self::Iastore => 1,
             Self::Sipush(_) => 3,
+            Self::Lreturn => 1,
         }
     }
 }

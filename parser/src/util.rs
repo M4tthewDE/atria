@@ -20,10 +20,10 @@ pub fn u4(r: &mut impl Read) -> Result<u32> {
     Ok(u32::from_be_bytes(buf))
 }
 
-pub fn u8(r: &mut impl Read) -> Result<u64> {
+pub fn i8(r: &mut impl Read) -> Result<i64> {
     let mut buf = [0; 8];
     r.read_exact(&mut buf)?;
-    Ok(u64::from_be_bytes(buf))
+    Ok(i64::from_be_bytes(buf))
 }
 
 pub fn i4(r: &mut impl Read) -> Result<i32> {

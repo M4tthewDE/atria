@@ -260,6 +260,10 @@ impl Jvm {
                 Instruction::Sipush(value) => {
                     self.stack.push_operand(FrameValue::Int(value.into()))?
                 }
+                Instruction::Lreturn => {
+                    self.lreturn()?;
+                    break;
+                }
             }
 
             match instruction {
@@ -410,6 +414,17 @@ impl Jvm {
             self.stack.offset_pc(offset)
         } else {
             self.stack.offset_pc(3)
+        }
+    }
+
+    fn lreturn(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+
+        if operand.long().is_ok() {
+            self.stack.pop()?;
+            self.stack.push_operand(operand)
+        } else {
+            bail!("ireturn can only return int, is {operand:?}")
         }
     }
 
@@ -802,6 +817,7 @@ impl Jvm {
                 "registerNatives" => Ok(None),
                 "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
                 "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
+                "objectFieldOffset1" => Ok(Some(FrameValue::Long(0))),
                 _ => bail!("native method not implemented"),
             }
         } else {
@@ -930,6 +946,7 @@ impl From<FrameValue> for FieldValue {
         match value {
             FrameValue::Reference(reference_value) => Self::Reference(reference_value),
             FrameValue::Int(val) => Self::Integer(val),
+            FrameValue::Long(val) => Self::Long(val),
         }
     }
 }

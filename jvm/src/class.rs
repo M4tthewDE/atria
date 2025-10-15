@@ -133,7 +133,7 @@ impl Class {
 pub enum FieldValue {
     Reference(ReferenceValue),
     Integer(i32),
-    Long(u64),
+    Long(i64),
     Float(f32),
     Double(f64),
 }

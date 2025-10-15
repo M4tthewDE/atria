@@ -4,7 +4,7 @@ use std::io::Read;
 use anyhow::{Context, Result, bail};
 use tracing::trace;
 
-use crate::util::{f4, f8, i4, u1, u2, u8, utf8};
+use crate::util::{f4, f8, i4, i8, u1, u2, utf8};
 
 /// A valid index into the constant pool.
 #[derive(Debug, Clone, PartialEq)]
@@ -128,7 +128,7 @@ pub enum CpInfo {
     Integer(i32),
     Float(f32),
     Double(f64),
-    Long(u64),
+    Long(i64),
     Class {
         name_index: CpIndex,
     },
@@ -176,7 +176,7 @@ impl CpInfo {
             INTEGER_TAG => Ok(Self::Integer(i4(r)?)),
             FLOAT_TAG => Ok(Self::Float(f4(r)?)),
             DOUBLE_TAG => Ok(Self::Double(f8(r)?)),
-            LONG_TAG => Ok(Self::Long(u8(r)?)),
+            LONG_TAG => Ok(Self::Long(i8(r)?)),
             CLASS_TAG => Ok(Self::Class {
                 name_index: u2(r)?.into(),
             }),
