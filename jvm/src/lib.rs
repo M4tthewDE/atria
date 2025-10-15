@@ -201,6 +201,9 @@ impl Jvm {
                     .stack
                     .push_operand(FrameValue::Reference(ReferenceValue::Null))?,
                 Instruction::Aastore => self.aa_store()?,
+                Instruction::Bipush(value) => {
+                    self.stack.push_operand(FrameValue::Int(value.into()))?
+                }
             }
 
             match instruction {

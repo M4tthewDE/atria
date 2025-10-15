@@ -36,6 +36,7 @@ pub enum Instruction {
     Iload(u8),
     AconstNull,
     Aastore,
+    Bipush(u8),
 }
 
 impl Instruction {
@@ -49,6 +50,7 @@ impl Instruction {
             0x6 => Instruction::Iconst(3),
             0x7 => Instruction::Iconst(4),
             0x8 => Instruction::Iconst(5),
+            0x10 => Instruction::Bipush(bytes[1]),
             0x12 => Instruction::Ldc(bytes[1].into()),
             0x13 => Instruction::LdcW(cp_index(bytes)),
             0x1a => Instruction::Iload(0),
@@ -112,6 +114,7 @@ impl Instruction {
             Self::Iload(_) => 1,
             Self::AconstNull => 1,
             Self::Aastore => 1,
+            Self::Bipush(_) => 2,
         }
     }
 }
