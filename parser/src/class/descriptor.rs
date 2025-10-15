@@ -57,6 +57,10 @@ impl MethodDescriptor {
             parameters,
         })
     }
+
+    pub fn is_void(&self) -> bool {
+        matches!(self.return_descriptor, ReturnDescriptor::Void)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

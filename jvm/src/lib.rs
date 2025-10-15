@@ -520,12 +520,12 @@ impl Jvm {
         let class_identifier = current_class.class_identifier(class_index)?;
         let (method_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
         let method = self.resolve_method(&class_identifier, method_name, descriptor)?;
+        let class = self.initialize(&class_identifier)?;
+        let method_descriptor = class.method_descriptor(&method)?;
 
-        if !Self::is_instance_initialization_method(method_name, descriptor) {
+        if !Self::is_instance_initialization_method(method_name, &method_descriptor) {
             bail!("TODO: invokespecial for non instance initialization methods")
         }
-
-        let class = self.initialize(&class_identifier)?;
 
         if class.contains_method(&method) {
             if method.is_synchronized() {
@@ -536,7 +536,6 @@ impl Jvm {
                 bail!("TODO: invokespecial native method")
             }
 
-            let method_descriptor = class.method_descriptor(&method)?;
             let operands = self
                 .stack
                 .pop_operands(method_descriptor.parameters.len() + 1)?;
@@ -612,8 +611,8 @@ impl Jvm {
         bail!("TODO: method handle resolution")
     }
 
-    fn is_instance_initialization_method(name: &str, descriptor: &str) -> bool {
-        name == "<init>" && descriptor == "()V"
+    fn is_instance_initialization_method(name: &str, descriptor: &MethodDescriptor) -> bool {
+        name == "<init>" && descriptor.is_void()
     }
 
     fn run_native_method(
