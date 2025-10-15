@@ -719,6 +719,24 @@ impl Jvm {
                         "boolean" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
                             ClassIdentifier::new("java.lang.Boolean")?,
                         )))),
+                        "byte" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Byte")?,
+                        )))),
+                        "short" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Short")?,
+                        )))),
+                        "char" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Character")?,
+                        )))),
+                        "double" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Double")?,
+                        )))),
+                        "long" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Long")?,
+                        )))),
+                        "float" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                            ClassIdentifier::new("java.lang.Float")?,
+                        )))),
                         _ => bail!("invalid primitive class name: '{name}'"),
                     }
                 }
@@ -733,7 +751,11 @@ impl Jvm {
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.Unsafe")? {
-            Ok(None)
+            match name {
+                "registerNatives" => Ok(None),
+                "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
+                _ => bail!("native method not implemented"),
+            }
         } else {
             bail!("native method not implemented")
         }
@@ -894,7 +916,7 @@ impl ClassIdentifier {
                     FieldType::ObjectType { class_name } => Self::new(&class_name),
                     FieldType::BaseType(base_type) => match base_type {
                         BaseType::Byte => Self::new("java.lang.Byte"),
-                        BaseType::Char => Self::new("java.lang.Char"),
+                        BaseType::Char => Self::new("java.lang.Character"),
                         BaseType::Double => Self::new("java.lang.Double"),
                         BaseType::Float => Self::new("java.lang.Float"),
                         BaseType::Int => Self::new("java.lang.Integer"),

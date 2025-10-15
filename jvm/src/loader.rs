@@ -55,7 +55,7 @@ impl BootstrapClassLoader {
             return Ok(class_file);
         }
 
-        bail!("class {identifier} not found")
+        bail!("class {identifier:?} not found")
     }
 
     fn check_version(class_file: &ClassFile) -> Result<()> {
