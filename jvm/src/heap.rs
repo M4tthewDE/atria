@@ -250,14 +250,17 @@ impl Heap {
         Ok(())
     }
 
-    pub fn get_primitive_array(&self, id: &HeapId) -> Result<&Vec<PrimitiveArrayValue>> {
+    pub fn get_primitive_array(
+        &self,
+        id: &HeapId,
+    ) -> Result<(&PrimitiveArrayType, &Vec<PrimitiveArrayValue>)> {
         let item = self
             .items
             .get(id)
             .context(format!("unknown object with {id:?}"))?;
 
         match item {
-            HeapItem::PrimitiveArray(_, primitive_array_values) => Ok(primitive_array_values),
+            HeapItem::PrimitiveArray(typ, values) => Ok((typ, values)),
             _ => bail!("object at {id:?} is not a primitive array, is {item:?}"),
         }
     }

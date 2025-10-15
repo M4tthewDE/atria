@@ -206,6 +206,7 @@ impl Jvm {
                 }
                 Instruction::Newarray(atype) => self.new_array(atype)?,
                 Instruction::Castore => self.castore()?,
+                Instruction::Bastore => self.bastore()?,
             }
 
             match instruction {
@@ -215,6 +216,28 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn bastore(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        let index = self.stack.pop_operand()?;
+        let array_ref = self.stack.pop_operand()?;
+
+        if !array_ref.is_reference() && self.is_array(&array_ref)? {
+            bail!("arrayref has to be a reference to an array, is {array_ref:?}")
+        }
+
+        let index = index.int()? as usize;
+        let heap_id = array_ref.reference()?.heap_id()?;
+        let (array_type, _) = self.heap.get_primitive_array(heap_id)?;
+
+        let value = match array_type {
+            PrimitiveArrayType::Boolean => PrimitiveArrayValue::Boolean((value.int()? & 1) != 0),
+            PrimitiveArrayType::Byte => PrimitiveArrayValue::Byte(value.int()? as u8),
+            _ => bail!("array type has to be bool or byte, is {array_type:?}"),
+        };
+
+        self.heap.store_into_primitive_array(heap_id, index, value)
     }
 
     fn castore(&mut self) -> Result<()> {
@@ -658,7 +681,7 @@ impl Jvm {
                         };
 
                     let value_heap_item = self.heap.get_field(heap_id, "value")?;
-                    let primitive_array =
+                    let (_, primitive_array) =
                         self.heap.get_primitive_array(value_heap_item.heap_id()?)?;
 
                     let bytes: Vec<u8> = primitive_array

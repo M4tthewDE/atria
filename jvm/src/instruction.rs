@@ -43,6 +43,7 @@ pub enum Instruction {
     Bipush(u8),
     Newarray(u8),
     Castore,
+    Bastore,
 }
 
 impl Instruction {
@@ -72,6 +73,7 @@ impl Instruction {
             0x4d => Instruction::Astore(2),
             0x4e => Instruction::Astore(3),
             0x53 => Instruction::Aastore,
+            0x54 => Instruction::Bastore,
             0x55 => Instruction::Castore,
             0x59 => Instruction::Dup,
             0x9a => Instruction::IfNe(offset(bytes)?),
@@ -125,6 +127,7 @@ impl Instruction {
             Self::Bipush(_) => 2,
             Self::Newarray(_) => 2,
             Self::Castore => 1,
+            Self::Bastore => 1,
         }
     }
 }
