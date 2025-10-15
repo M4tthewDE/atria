@@ -52,6 +52,16 @@ impl HeapItem {
             Self::ReferenceArray { .. } | Self::PrimitiveArray(_, _) => true,
         }
     }
+
+    pub fn class_identifier(&self) -> Result<&ClassIdentifier> {
+        Ok(match self {
+            HeapItem::Object(object) => &object.class_identifier,
+            HeapItem::ReferenceArray { class, .. } => class,
+            HeapItem::PrimitiveArray(_, _) => {
+                bail!("TODO: what is the class of a primitive array?")
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

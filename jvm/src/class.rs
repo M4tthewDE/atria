@@ -107,13 +107,13 @@ impl Class {
         self.utf8(&method.name_index)
     }
 
-    pub fn set_field(&mut self, name: &str, value: FieldValue) -> Result<()> {
+    pub fn set_static_field(&mut self, name: &str, value: FieldValue) -> Result<()> {
         trace!("setting field {name} to value {value:?}");
         self.fields.insert(name.to_string(), value);
         Ok(())
     }
 
-    pub fn get_field_value(&self, name: &str) -> Result<FieldValue> {
+    pub fn get_static_field_value(&self, name: &str) -> Result<FieldValue> {
         self.fields
             .get(name)
             .context(format!("field {name} not found in {:?}", self.identifier))

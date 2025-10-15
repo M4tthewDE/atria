@@ -157,7 +157,7 @@ impl Jvm {
             FieldDescriptor::new(class.utf8(&field.descriptor_index)?)?.into()
         };
 
-        class.set_field(&name, field_value)
+        class.set_static_field(&name, field_value)
     }
 
     fn resolve_constant_value(
@@ -299,8 +299,6 @@ impl Jvm {
             FrameValue::Int(1)
         } else if value1 == value2 {
             FrameValue::Int(0)
-        } else if value1 < value2 {
-            FrameValue::Int(-1)
         } else {
             FrameValue::Int(-1)
         };
@@ -458,7 +456,7 @@ impl Jvm {
         self.resolve_field(&class_identifier, &name, descriptor.raw())?;
 
         let class = self.class(&class_identifier)?;
-        let field_value = class.get_field_value(&name)?;
+        let field_value = class.get_static_field_value(&name)?;
 
         self.stack.push_operand(field_value.into())
     }
@@ -639,7 +637,7 @@ impl Jvm {
         self.resolve_field(&class_identifier, &name, descriptor.raw())?;
         let value = self.stack.pop_operand()?;
         let class = self.class_mut(&class_identifier)?;
-        class.set_field(&name, value.into())
+        class.set_static_field(&name, value.into())
     }
 
     fn aload(&mut self, index: u8) -> Result<()> {
@@ -665,10 +663,30 @@ impl Jvm {
             bail!("objectref has to be a reference but no array, is {object_ref:?}");
         }
 
-        let identifier = object_ref.reference()?.class_identifier()?;
-        let class = self.class(identifier)?;
-        let field_value = class.get_field_value(&name)?;
-        self.stack.push_operand(field_value.into())
+        // TODO: is this good? maybe classes should live on the heap as well?
+        if class_identifier == ClassIdentifier::new("java.lang.Class")? {
+            let identifier = self.class_identifier_from_reference(object_ref.reference()?)?;
+            let class = self.class(&identifier)?;
+            let field_value = class.get_static_field_value(&name)?;
+            self.stack.push_operand(field_value.into())
+        } else {
+            let heap_id = object_ref.reference()?.heap_id()?;
+            let field_value = self.heap.get_field(heap_id, &name)?;
+            self.stack.push_operand(field_value.into())
+        }
+    }
+
+    fn class_identifier_from_reference(
+        &self,
+        reference: &ReferenceValue,
+    ) -> Result<ClassIdentifier> {
+        match reference {
+            ReferenceValue::Class(class_identifier) => Ok(class_identifier.clone()),
+            ReferenceValue::HeapItem(heap_id) => {
+                self.heap.get(heap_id)?.class_identifier().cloned()
+            }
+            _ => bail!("no class identifier found for value {reference:?}"),
+        }
     }
 
     fn istore(&mut self, index: u8) -> Result<()> {
@@ -968,7 +986,7 @@ impl Jvm {
         if class.has_super_class() {
             let super_class = self.initialize(&class.super_class()?)?;
             let super_class_fields = self.default_instance_fields(&super_class)?;
-            fields.extend(super_class_fields.into_iter());
+            fields.extend(super_class_fields);
         }
 
         Ok(fields)
