@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::time::Instant;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -38,6 +39,7 @@ pub struct Jvm {
     stack: Stack,
     main_class: ClassIdentifier,
     heap: Heap,
+    creation_time: Instant,
 }
 
 impl Jvm {
@@ -54,6 +56,7 @@ impl Jvm {
             stack: Stack::default(),
             main_class,
             heap: Heap::default(),
+            creation_time: Instant::now(),
         })
     }
 
@@ -291,6 +294,7 @@ impl Jvm {
                 Instruction::Istore(index) => self.istore(index)?,
                 Instruction::Isub => self.isub()?,
                 Instruction::Iand => self.iand()?,
+                Instruction::Land => self.land()?,
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
                 Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
                 Instruction::Ifgt(offset) => self.if_gt(offset)?,
@@ -328,6 +332,7 @@ impl Jvm {
                 Instruction::IfIcmpeq(offset) => self.if_icmpeq(offset)?,
                 Instruction::ArrayLength => self.array_length()?,
                 Instruction::Ishr => self.ishr()?,
+                Instruction::Lshr => self.lshr()?,
                 Instruction::Baload => self.baload()?,
                 Instruction::I2c => self.i2c()?,
                 Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
@@ -345,6 +350,11 @@ impl Jvm {
                 Instruction::Astore0 => self.astore(0)?,
                 Instruction::Astore1 => self.astore(1)?,
                 Instruction::Astore2 => self.astore(2)?,
+                Instruction::Lload0 => self.lload(0)?,
+                Instruction::Lload1 => self.lload(1)?,
+                Instruction::Lload2 => self.lload(2)?,
+                Instruction::Lload3 => self.lload(3)?,
+                Instruction::Lmul => self.lmul()?,
             }
 
             // TODO: this is very brittle
@@ -478,10 +488,25 @@ impl Jvm {
         self.stack.push_operand(FrameValue::Int(result))
     }
 
+    fn lshr(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        let result = value1 >> (value2 & 63);
+        self.stack.push_operand(FrameValue::Long(result))
+    }
+
     fn iinc(&mut self, index: usize, constant: i8) -> Result<()> {
         let local_variable = self.stack.local_variable(index)?.int()?;
         self.stack
             .set_local_variable(index, FrameValue::Int(local_variable + constant as i32))
+    }
+
+    fn lmul(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.long()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+        self.stack
+            .push_operand(FrameValue::Long(value1.wrapping_mul(value2)))
     }
 
     fn lcmp(&mut self) -> Result<()> {
@@ -586,6 +611,13 @@ impl Jvm {
         let value1 = self.stack.pop_operand()?.int()?;
 
         self.stack.push_operand(FrameValue::Int(value1 & value2))
+    }
+
+    fn land(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.long()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        self.stack.push_operand(FrameValue::Long(value1 & value2))
     }
 
     fn isub(&mut self) -> Result<()> {
@@ -1297,6 +1329,20 @@ impl Jvm {
         } else if class.identifier() == &ClassIdentifier::new("java.lang.System")? {
             match name {
                 "registerNatives" => Ok(None),
+                "nanoTime" => {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(self.creation_time).as_nanos();
+                    Ok(Some(FrameValue::Long(elapsed as i64)))
+                }
+                _ => bail!("native method not implemented"),
+            }
+        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.CDS")? {
+            match name {
+                "isDumpingClassList0" => Ok(Some(FrameValue::Int(0))),
+                "isDumpingArchive0" => Ok(Some(FrameValue::Int(0))),
+                "isSharingEnabled0" => Ok(Some(FrameValue::Int(0))),
+                // TODO: provide a proper seed
+                "getRandomSeedForDumping" => Ok(Some(FrameValue::Long(0))),
                 _ => bail!("native method not implemented"),
             }
         } else {
@@ -1443,9 +1489,9 @@ impl From<FieldValue> for FrameValue {
         match value {
             FieldValue::Reference(reference_value) => Self::Reference(reference_value),
             FieldValue::Integer(val) => Self::Int(val),
-            FieldValue::Long(_) => todo!(),
-            FieldValue::Float(_) => todo!(),
-            FieldValue::Double(_) => todo!(),
+            FieldValue::Long(val) => Self::Long(val),
+            FieldValue::Float(val) => Self::Float(val),
+            FieldValue::Double(val) => Self::Double(val),
         }
     }
 }

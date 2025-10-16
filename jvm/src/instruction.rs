@@ -96,6 +96,8 @@ pub enum Instruction {
     IfIcmpeq(i16),
     ArrayLength,
     Ishr,
+    Lshr,
+    Land,
     Baload,
     I2c,
     IfIcmpne(i16),
@@ -113,6 +115,11 @@ pub enum Instruction {
     Astore0,
     Astore1,
     Astore2,
+    Lload0,
+    Lload1,
+    Lload2,
+    Lload3,
+    Lmul,
 }
 
 impl Instruction {
@@ -132,6 +139,10 @@ impl Instruction {
             0x11 => Instruction::Sipush(short(bytes)?),
             0x12 => Instruction::Ldc((*bytes.get(1).context("premature end of code")?).into()),
             0x13 => Instruction::LdcW(cp_index(bytes)?),
+            0x1e => Instruction::Lload0,
+            0x1f => Instruction::Lload1,
+            0x20 => Instruction::Lload2,
+            0x21 => Instruction::Lload3,
             0xb => Instruction::Fconst(0.0),
             0xc => Instruction::Fconst(1.0),
             0xd => Instruction::Fconst(2.0),
@@ -175,10 +186,13 @@ impl Instruction {
             0x60 => Instruction::Iadd,
             0x63 => Instruction::Dadd,
             0x64 => Instruction::Isub,
+            0x69 => Instruction::Lmul,
             0x6e => Instruction::Fdiv,
             0x7a => Instruction::Ishr,
+            0x7b => Instruction::Lshr,
             0x7c => Instruction::Iushr,
             0x7e => Instruction::Iand,
+            0x7f => Instruction::Land,
             0x84 => Instruction::Iinc(
                 *bytes.get(1).context("premature end of code")?,
                 *bytes.get(1).context("premature end of code")? as i8,
@@ -321,6 +335,13 @@ impl Instruction {
             Self::Astore0 => 1,
             Self::Astore1 => 1,
             Self::Astore2 => 1,
+            Self::Lload0 => 1,
+            Self::Lload1 => 1,
+            Self::Lload2 => 1,
+            Self::Lload3 => 1,
+            Self::Lmul => 1,
+            Self::Lshr => 1,
+            Self::Land => 1,
         }
     }
 }
