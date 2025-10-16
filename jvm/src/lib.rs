@@ -86,6 +86,7 @@ impl Jvm {
 
     pub fn run(&mut self) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
+        self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
         let main_class = &self.main_class.clone();
         self.initialize(main_class)?;
         bail!("TODO: run")
@@ -356,6 +357,9 @@ impl Jvm {
                 Instruction::Lload3 => self.lload(3)?,
                 Instruction::Lmul => self.lmul()?,
                 Instruction::Imul => self.imul()?,
+                Instruction::InvokeInterface(ref index, count) => {
+                    self.invoke_interface(index, count)?
+                }
             }
 
             // TODO: this is very brittle
@@ -973,6 +977,33 @@ impl Jvm {
             Ok(())
         }
     }
+    fn invoke_interface(&mut self, index: &CpIndex, _: u8) -> Result<()> {
+        let (class_identifier, name, descriptor) = self.method_ref(index)?;
+        let method = self.resolve_interface_method(&class_identifier, &name, &descriptor)?;
+
+        if method.is_synchronized() {
+            bail!("TODO: synchronized interface method")
+        }
+
+        if method.is_native() {
+            bail!("TODO: native interface method")
+        }
+
+        let interface_class = self.class(&class_identifier)?;
+        let method_descriptor = interface_class.method_descriptor(&method)?;
+        let operands = self
+            .stack
+            .pop_operands(method_descriptor.parameters.len() + 1)?;
+
+        let reference = operands.first().context("no first operand")?.reference()?;
+        let class_identifier = self.class_identifier_from_reference(reference)?;
+        let class = self.class(&class_identifier)?;
+        let method = class.method(&name, &descriptor)?;
+        let code = method.code().context("method {name} has no code")?.to_vec();
+        self.stack
+            .push(name, method_descriptor, operands, code, class_identifier);
+        self.execute()
+    }
 
     fn invoke_static(&mut self, index: &CpIndex) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
@@ -1354,6 +1385,16 @@ impl Jvm {
                 "initializeFromArchive" => Ok(None),
                 _ => bail!("native method not implemented"),
             }
+        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.reflect.Reflection")? {
+            match name {
+                "getCallerClass" => {
+                    let caller_class = self.stack.caller_class()?;
+                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                        caller_class.clone(),
+                    ))))
+                }
+                _ => bail!("native method not implemented"),
+            }
         } else {
             bail!("native method not implemented")
         }
@@ -1423,6 +1464,28 @@ impl Jvm {
                 .context("method not found, maybe check interfaces?")?;
             self.resolve_method(&super_class, name, descriptor)
         }
+    }
+
+    fn resolve_interface_method(
+        &mut self,
+        class: &ClassIdentifier,
+        name: &str,
+        descriptor: &str,
+    ) -> Result<Method> {
+        let class = self.initialize(class)?;
+
+        if !class.is_interface() {
+            bail!(
+                "class {:?} is not a interface, TODO: throw IncompatibleClassChangeError",
+                class.identifier()
+            );
+        }
+
+        if let Ok(m) = class.method(name, descriptor) {
+            return Ok(m.clone());
+        }
+
+        bail!("TODO: 5.4.3.4 interface method resolution")
     }
 
     fn resolve_field(

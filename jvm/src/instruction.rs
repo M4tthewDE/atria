@@ -121,6 +121,7 @@ pub enum Instruction {
     Lload3,
     Lmul,
     Imul,
+    InvokeInterface(CpIndex, u8),
 }
 
 impl Instruction {
@@ -230,6 +231,10 @@ impl Instruction {
             0xb6 => Instruction::InvokeVirtual(cp_index(bytes)?),
             0xb7 => Instruction::InvokeSpecial(cp_index(bytes)?),
             0xb8 => Instruction::InvokeStatic(cp_index(bytes)?),
+            0xb9 => Instruction::InvokeInterface(
+                cp_index(bytes)?,
+                *bytes.get(3).context("premature end of code")?,
+            ),
             0xba => Instruction::InvokeDynamic(cp_index(bytes)?),
             0xbb => Instruction::New(cp_index(bytes)?),
             0xbc => Instruction::Newarray(*bytes.get(1).context("premature end of code")?),
@@ -345,6 +350,7 @@ impl Instruction {
             Self::Imul => 1,
             Self::Lshr => 1,
             Self::Land => 1,
+            Self::InvokeInterface(_, _) => 5,
         }
     }
 }

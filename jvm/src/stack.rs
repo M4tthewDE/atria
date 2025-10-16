@@ -112,6 +112,14 @@ impl Stack {
             .local_variables
             .clone())
     }
+
+    pub fn caller_class(&self) -> Result<&ClassIdentifier> {
+        Ok(&self
+            .frames
+            .get(self.frames.len() - 2)
+            .context("no caller found")?
+            .class)
+    }
 }
 
 #[derive(Debug)]

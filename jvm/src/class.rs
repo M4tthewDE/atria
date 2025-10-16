@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result, bail};
 use parser::class::{
     ClassFile,
+    access_flags::AccessFlag,
     constant_pool::{CpIndex, CpInfo},
     descriptor::{BaseType, FieldDescriptor, FieldType, MethodDescriptor},
     field::Field,
@@ -126,6 +127,12 @@ impl Class {
 
     pub fn contains_method(&self, method: &Method) -> bool {
         self.class_file.methods.contains(method)
+    }
+
+    pub fn is_interface(&self) -> bool {
+        self.class_file
+            .access_flags
+            .contains(&AccessFlag::Interface)
     }
 }
 
