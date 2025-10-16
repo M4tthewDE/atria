@@ -272,7 +272,20 @@ impl Heap {
 
         match item {
             HeapItem::PrimitiveArray(typ, values) => Ok((typ, values)),
-            _ => bail!("object at {id:?} is not a primitive array, is {item:?}"),
+            _ => bail!("object at {id:?} is not a array, is {item:?}"),
+        }
+    }
+
+    pub fn get_array_length(&self, id: &HeapId) -> Result<usize> {
+        let item = self
+            .items
+            .get(id)
+            .context(format!("unknown object with {id:?}"))?;
+
+        match item {
+            HeapItem::PrimitiveArray(_, values) => Ok(values.len()),
+            HeapItem::ReferenceArray { values, .. } => Ok(values.len()),
+            _ => bail!("object at {id:?} is not a array, is {item:?}"),
         }
     }
 }

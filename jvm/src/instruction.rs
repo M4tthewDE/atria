@@ -94,6 +94,9 @@ pub enum Instruction {
     Iadd,
     Lconst(i64),
     IfIcmpeq(i16),
+    ArrayLength,
+    Ishr,
+    Baload,
 }
 
 impl Instruction {
@@ -133,6 +136,7 @@ impl Instruction {
             0x2b => Instruction::Aload1,
             0x2c => Instruction::Aload2,
             0x2d => Instruction::Aload3,
+            0x33 => Instruction::Baload,
             0x36 => Instruction::Istore(*bytes.get(1).context("premature end of code")?),
             0x37 => Instruction::Lstore(*bytes.get(1).context("premature end of code")?),
             0x3b => Instruction::Istore(0),
@@ -152,6 +156,7 @@ impl Instruction {
             0x63 => Instruction::Dadd,
             0x64 => Instruction::Isub,
             0x6e => Instruction::Fdiv,
+            0x7a => Instruction::Ishr,
             0x7c => Instruction::Iushr,
             0x7e => Instruction::Iand,
             0x84 => Instruction::Iinc(
@@ -190,6 +195,7 @@ impl Instruction {
             0xbb => Instruction::New(cp_index(bytes)?),
             0xbc => Instruction::Newarray(*bytes.get(1).context("premature end of code")?),
             0xbd => Instruction::Anewarray(cp_index(bytes)?),
+            0xbe => Instruction::ArrayLength,
             0xc6 => Instruction::IfNull(offset(bytes)?),
             0xc7 => Instruction::IfNonNull(offset(bytes)?),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
@@ -271,6 +277,9 @@ impl Instruction {
             Self::Aload3 => 1,
             Self::Lconst(_) => 1,
             Self::IfIcmpeq(_) => 3,
+            Self::ArrayLength => 1,
+            Self::Ishr => 1,
+            Self::Baload => 1,
         }
     }
 }

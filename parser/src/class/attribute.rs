@@ -28,6 +28,7 @@ const BOOTSTRAP_METHODS_ATTR_NAME: &str = "BootstrapMethods";
 const INNER_CLASSES_ATTR_NAME: &str = "InnerClasses";
 const METHOD_PARAMETERS_ATTR_NAME: &str = "MethodParameters";
 const NEST_HOST_ATTR_NAME: &str = "NestHost";
+const ENCLOSING_METHOD_ATTR_NAME: &str = "EnclosingMethod";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Attribute {
@@ -113,6 +114,12 @@ pub enum Attribute {
         attribute_name_index: CpIndex,
         attribute_length: u32,
         host_class_index: CpIndex,
+    },
+    EnclosingMethod {
+        attribute_name_index: CpIndex,
+        attribute_length: u32,
+        class_index: CpIndex,
+        method_index: CpIndex,
     },
 }
 
@@ -314,7 +321,12 @@ impl Attribute {
                 attribute_length,
                 host_class_index: u2(r)?.into(),
             },
-
+            ENCLOSING_METHOD_ATTR_NAME => Self::EnclosingMethod {
+                attribute_name_index,
+                attribute_length,
+                class_index: u2(r)?.into(),
+                method_index: u2(r)?.into(),
+            },
             _ => bail!("unknown attribute {}", name),
         });
         trace!("parsed bytes: {}", r.stream_position()? - before);

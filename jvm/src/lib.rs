@@ -326,6 +326,9 @@ impl Jvm {
                 Instruction::Iadd => self.iadd()?,
                 Instruction::Lconst(value) => self.stack.push_operand(FrameValue::Long(value))?,
                 Instruction::IfIcmpeq(offset) => self.if_icmpeq(offset)?,
+                Instruction::ArrayLength => self.array_length()?,
+                Instruction::Ishr => self.ishr()?,
+                Instruction::Baload => self.baload()?,
             }
 
             // TODO: this is very brittle
@@ -349,11 +352,49 @@ impl Jvm {
         Ok(())
     }
 
+    fn baload(&mut self) -> Result<()> {
+        let index = self.stack.pop_operand()?.int()?;
+        let arrayref_operand = self.stack.pop_operand()?;
+        let arrayref = arrayref_operand.reference()?;
+
+        if arrayref.is_null() {
+            bail!("TODO: throw NullPointerException")
+        }
+
+        let (_, values) = self.heap.get_primitive_array(arrayref.heap_id()?)?;
+        let array_value = values
+            .get(index as usize)
+            .context("no array value at index {index}")?;
+
+        let value = match array_value {
+            PrimitiveArrayValue::Boolean(val) => FrameValue::Int((*val).into()),
+            PrimitiveArrayValue::Byte(val) => FrameValue::Int((*val).into()),
+            _ => bail!("baload array value must be boolean or byte"),
+        };
+
+        self.stack.push_operand(value)
+    }
+
+    fn array_length(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let heap_id = operand.reference()?.heap_id()?;
+        let len = self.heap.get_array_length(heap_id)?;
+        self.stack.push_operand(FrameValue::Int(len as i32))
+    }
+
     fn iushr(&mut self) -> Result<()> {
         let value2 = self.stack.pop_operand()?.int()?;
         let value1 = self.stack.pop_operand()?.int()?;
 
         let result = ((value1 as u32) >> (value2 & 31)) as i32;
+        self.stack.push_operand(FrameValue::Int(result))
+    }
+
+    fn ishr(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        let result = value1 >> (value2 & 31);
         self.stack.push_operand(FrameValue::Int(result))
     }
 
@@ -1401,6 +1442,10 @@ impl ReferenceValue {
             ReferenceValue::Class(class_identifier) => Ok(class_identifier),
             _ => bail!("no class identifier found"),
         }
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
     }
 }
 
