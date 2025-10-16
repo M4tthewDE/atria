@@ -276,6 +276,21 @@ impl Jvm {
                 Instruction::Fcmpl => self.fcmpl()?,
                 Instruction::Ifle(offset) => self.if_le(offset)?,
                 Instruction::Iflt(offset) => self.if_lt(offset)?,
+                Instruction::IfIcmpge(offset) => self.if_icmpge(offset)?,
+                Instruction::Dconst(val) => self.stack.push_operand(FrameValue::Double(val))?,
+                Instruction::I2l => self.i2l()?,
+                Instruction::L2f => self.l2f()?,
+                Instruction::Fdiv => self.fdiv()?,
+                Instruction::F2d => self.f2d()?,
+                Instruction::Dadd => self.dadd()?,
+                Instruction::D2l => self.d2l()?,
+                Instruction::Lstore(index) => self.lstore(index)?,
+                Instruction::Lload(index) => self.lload(index)?,
+                Instruction::Ldc2W(ref index) => self.ldc2_w(index)?,
+                Instruction::Lcmp => self.lcmp()?,
+                Instruction::L2i => self.l2i()?,
+                Instruction::IfIcmplt(offset) => self.if_icmplt(offset)?,
+                Instruction::Iinc(index, constant) => self.iinc(index as usize, constant)?,
             }
 
             // TODO: this is very brittle
@@ -287,12 +302,90 @@ impl Jvm {
                 | Instruction::Ifle(_)
                 | Instruction::Iflt(_)
                 | Instruction::Ifgt(_)
+                | Instruction::IfIcmpge(_)
+                | Instruction::IfIcmplt(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
 
         Ok(())
+    }
+
+    fn iinc(&mut self, index: usize, constant: i8) -> Result<()> {
+        let local_variable = self.stack.local_variable(index)?.int()?;
+        self.stack
+            .set_local_variable(index, FrameValue::Int(local_variable + constant as i32))
+    }
+
+    fn lcmp(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.long()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        let value = if value1 > value2 {
+            FrameValue::Int(1)
+        } else if value1 == value2 {
+            FrameValue::Int(0)
+        } else {
+            FrameValue::Int(-1)
+        };
+
+        self.stack.push_operand(value)
+    }
+
+    fn lload(&mut self, index: u8) -> Result<()> {
+        let value = self.stack.local_variable(index.into())?;
+        if value.long().is_err() {
+            bail!("lload can only load longs, is {value:?}")
+        }
+
+        self.stack.push_operand(value)
+    }
+
+    fn lstore(&mut self, index: u8) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        if value.long().is_err() {
+            bail!("lstore can only store longs, is {value:?}")
+        }
+
+        self.stack.set_local_variable(index.into(), value)
+    }
+
+    fn l2i(&mut self) -> Result<()> {
+        let long = self.stack.pop_operand()?.long()?;
+        self.stack.push_operand(FrameValue::Int(long as i32))
+    }
+
+    fn d2l(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.double()?;
+        self.stack.push_operand(FrameValue::Long(value as i64))
+    }
+
+    fn dadd(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.double()?;
+        let value1 = self.stack.pop_operand()?.double()?;
+        self.stack.push_operand(FrameValue::Double(value1 + value2))
+    }
+
+    fn f2d(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.float()?;
+        self.stack.push_operand(FrameValue::Double(value.into()))
+    }
+
+    fn fdiv(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.float()?;
+        let value1 = self.stack.pop_operand()?.float()?;
+        self.stack.push_operand(FrameValue::Float(value1 / value2))
+    }
+
+    fn i2l(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.int()?;
+        self.stack.push_operand(FrameValue::Long(value.into()))
+    }
+
+    fn l2f(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.long()?;
+        self.stack.push_operand(FrameValue::Float(value as f32))
     }
 
     fn fcmpl(&mut self) -> Result<()> {
@@ -474,6 +567,28 @@ impl Jvm {
         }
     }
 
+    fn if_icmplt(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 < value2 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_icmpge(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 >= value2 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
     fn if_le(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? <= 0 {
@@ -530,6 +645,18 @@ impl Jvm {
         } else {
             bail!("ireturn can only return int, is {operand:?}")
         }
+    }
+
+    fn ldc2_w(&mut self, index: &CpIndex) -> Result<()> {
+        let current_class = self.current_class()?;
+
+        let value = match current_class.cp_item(index)? {
+            CpInfo::Long(value) => FrameValue::Long(*value),
+            CpInfo::Double(value) => FrameValue::Double(*value),
+            info => bail!("item {info:?} at index {index:?} is not loadable"),
+        };
+
+        self.stack.push_operand(value)
     }
 
     fn ldc(&mut self, index: &CpIndex) -> Result<()> {
@@ -1075,6 +1202,8 @@ impl From<FrameValue> for FieldValue {
             FrameValue::Int(val) => Self::Integer(val),
             FrameValue::Long(val) => Self::Long(val),
             FrameValue::Float(val) => Self::Float(val),
+            FrameValue::Double(val) => Self::Double(val),
+            FrameValue::Reserved => panic!("impossible"),
         }
     }
 }

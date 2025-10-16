@@ -72,7 +72,13 @@ impl Stack {
 
     pub fn set_local_variable(&mut self, index: usize, value: FrameValue) -> Result<()> {
         let frame = self.frames.last_mut().context("no frame found")?;
-        frame.set_local_variable(index, value)
+
+        if matches!(value, FrameValue::Long(_)) {
+            frame.set_local_variable(index, value)?;
+            frame.set_local_variable(index + 1, FrameValue::Reserved)
+        } else {
+            frame.set_local_variable(index, value)
+        }
     }
 
     pub fn method_name(&self) -> Result<&str> {
@@ -210,10 +216,12 @@ impl Frame {
 
 #[derive(Debug, Clone)]
 pub enum FrameValue {
+    Reserved,
     Reference(ReferenceValue),
     Int(i32),
     Long(i64),
     Float(f32),
+    Double(f64),
 }
 
 impl FrameValue {
@@ -254,6 +262,14 @@ impl FrameValue {
             Ok(*float)
         } else {
             bail!("frame value is not a float")
+        }
+    }
+
+    pub fn double(&self) -> Result<f64> {
+        if let Self::Double(double) = self {
+            Ok(*double)
+        } else {
+            bail!("frame value is not a double")
         }
     }
 }
