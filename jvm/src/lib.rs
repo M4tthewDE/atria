@@ -258,6 +258,7 @@ impl Jvm {
                     self.stack.pop()?;
                     break;
                 }
+                Instruction::Aload(index) => self.aload(index)?,
                 Instruction::Aload0 => self.aload(0)?,
                 Instruction::Aload1 => self.aload(1)?,
                 Instruction::Aload2 => self.aload(2)?,
@@ -361,6 +362,7 @@ impl Jvm {
                 Instruction::Astore0 => self.astore(0)?,
                 Instruction::Astore1 => self.astore(1)?,
                 Instruction::Astore2 => self.astore(2)?,
+                Instruction::Astore3 => self.astore(3)?,
                 Instruction::Lload0 => self.lload(0)?,
                 Instruction::Lload1 => self.lload(1)?,
                 Instruction::Lload2 => self.lload(2)?,
