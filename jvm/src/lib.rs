@@ -334,6 +334,17 @@ impl Jvm {
                 Instruction::IfAcmpne(offset) => self.if_acmpne(offset)?,
                 Instruction::Instanceof(ref index) => self.instance_of(index)?,
                 Instruction::Checkcast(ref index) => self.check_cast(index)?,
+                Instruction::Lstore0 => self.lstore(0)?,
+                Instruction::Lstore1 => self.lstore(1)?,
+                Instruction::Lstore2 => self.lstore(2)?,
+                Instruction::Lstore3 => self.lstore(3)?,
+                Instruction::Istore0 => self.istore(0)?,
+                Instruction::Istore1 => self.istore(1)?,
+                Instruction::Istore2 => self.istore(2)?,
+                Instruction::Istore3 => self.istore(3)?,
+                Instruction::Astore0 => self.astore(0)?,
+                Instruction::Astore1 => self.astore(1)?,
+                Instruction::Astore2 => self.astore(2)?,
             }
 
             // TODO: this is very brittle
@@ -1395,16 +1406,21 @@ impl Jvm {
 
     fn method_ref(&mut self, index: &CpIndex) -> Result<(ClassIdentifier, String, String)> {
         let current_class = self.current_class()?;
-        if let CpInfo::MethodRef {
-            class_index,
-            name_and_type_index,
-        } = current_class.cp_item(index)?
-        {
-            let class_identifier = current_class.class_identifier(class_index)?;
-            let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
-            Ok((class_identifier, name.to_string(), descriptor.to_string()))
-        } else {
-            bail!("no method reference at index {index:?}")
+
+        match current_class.cp_item(index)? {
+            CpInfo::MethodRef {
+                class_index,
+                name_and_type_index,
+            }
+            | CpInfo::InterfaceMethodRef {
+                class_index,
+                name_and_type_index,
+            } => {
+                let class_identifier = current_class.class_identifier(class_index)?;
+                let (name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+                Ok((class_identifier, name.to_string(), descriptor.to_string()))
+            }
+            _ => bail!("no method reference at index {index:?}"),
         }
     }
 }

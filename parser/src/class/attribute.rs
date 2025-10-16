@@ -455,6 +455,7 @@ pub enum VerificationType {
     Double,
     Long,
     Object(CpIndex),
+    Uninitialized(u16),
 }
 
 impl VerificationType {
@@ -468,6 +469,7 @@ impl VerificationType {
             3 => Self::Double,
             4 => Self::Long,
             7 => Self::Object(u2(r)?.into()),
+            8 => Self::Uninitialized(u2(r)?),
             _ => bail!("invalid verification type tag: {tag}"),
         })
     }
