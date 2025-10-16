@@ -134,7 +134,7 @@ impl Jvm {
 
     pub fn initialize_static_fields(&mut self, class: &mut Class) -> Result<()> {
         for field in &class.fields().clone() {
-            if field.is_static_final() {
+            if field.is_static() {
                 self.initialize_static_final_field(class, field)?;
             }
         }
@@ -304,6 +304,7 @@ impl Jvm {
                 Instruction::Iushr => self.iushr()?,
                 Instruction::Ifge(offset) => self.if_ge(offset)?,
                 Instruction::Iadd => self.iadd()?,
+                Instruction::Lconst(value) => self.stack.push_operand(FrameValue::Long(value))?,
             }
 
             // TODO: this is very brittle
@@ -1107,6 +1108,11 @@ impl Jvm {
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("java.lang.Thread")? {
+            match name {
+                "registerNatives" => Ok(None),
+                _ => bail!("native method not implemented"),
+            }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.System")? {
             match name {
                 "registerNatives" => Ok(None),
                 _ => bail!("native method not implemented"),

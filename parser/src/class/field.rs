@@ -52,11 +52,6 @@ impl Field {
         Ok(fields)
     }
 
-    pub fn is_static_final(&self) -> bool {
-        self.access_flags.contains(&AccessFlag::Static)
-            && self.access_flags.contains(&AccessFlag::Final)
-    }
-
     pub fn is_static(&self) -> bool {
         self.access_flags.contains(&AccessFlag::Static)
     }

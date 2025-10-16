@@ -92,6 +92,7 @@ pub enum Instruction {
     Iushr,
     Ifge(i16),
     Iadd,
+    Lconst(i64),
 }
 
 impl Instruction {
@@ -105,6 +106,8 @@ impl Instruction {
             0x6 => Instruction::Iconst(3),
             0x7 => Instruction::Iconst(4),
             0x8 => Instruction::Iconst(5),
+            0x9 => Instruction::Lconst(0),
+            0xa => Instruction::Lconst(1),
             0x10 => Instruction::Bipush(*bytes.get(1).context("premature end of code")?),
             0x11 => Instruction::Sipush(short(bytes)?),
             0x12 => Instruction::Ldc((*bytes.get(1).context("premature end of code")?).into()),
@@ -264,6 +267,7 @@ impl Instruction {
             Self::Aload1 => 1,
             Self::Aload2 => 1,
             Self::Aload3 => 1,
+            Self::Lconst(_) => 1,
         }
     }
 }
