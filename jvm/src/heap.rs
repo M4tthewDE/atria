@@ -254,7 +254,7 @@ impl Heap {
             .context(format!("unknown object with {id:?}"))?;
 
         match arr {
-            HeapItem::PrimitiveArray(_, values) => values.insert(index, value),
+            HeapItem::PrimitiveArray(_, values) => values[index] = value,
             _ => bail!("object at {id:?} is not a reference array, is {arr:?}"),
         }
 

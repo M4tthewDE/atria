@@ -49,9 +49,11 @@ impl Method {
         Ok(methods)
     }
 
-    pub fn code(&self) -> Option<&Vec<u8>> {
+    pub fn code(&self) -> Option<(&Vec<u8>, u16)> {
         self.attributes.iter().find_map(|attr| match attr {
-            Attribute::Code { code, .. } => Some(code),
+            Attribute::Code {
+                code, max_locals, ..
+            } => Some((code, *max_locals)),
             _ => None,
         })
     }

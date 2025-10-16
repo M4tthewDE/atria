@@ -100,6 +100,7 @@ pub enum Instruction {
     Ishr,
     Lshr,
     Land,
+    Ixor,
     Baload,
     I2c,
     IfIcmpne(i16),
@@ -202,6 +203,7 @@ impl Instruction {
             0x7c => Instruction::Iushr,
             0x7e => Instruction::Iand,
             0x7f => Instruction::Land,
+            0x82 => Instruction::Ixor,
             0x84 => Instruction::Iinc(
                 *bytes.get(1).context("premature end of code")?,
                 *bytes.get(1).context("premature end of code")? as i8,
@@ -360,6 +362,7 @@ impl Instruction {
             Self::InvokeInterface(_, _) => 5,
             Self::Aload(_) => 2,
             Self::Pop => 1,
+            Self::Ixor => 1,
         }
     }
 }

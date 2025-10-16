@@ -13,10 +13,15 @@ impl Stack {
         &mut self,
         method_name: String,
         method_descriptor: MethodDescriptor,
-        local_variables: Vec<FrameValue>,
+        mut local_variables: Vec<FrameValue>,
+        max_locals: u16,
         code: Vec<u8>,
         class: ClassIdentifier,
     ) {
+        while local_variables.len() < max_locals.into() {
+            local_variables.push(FrameValue::Reserved);
+        }
+
         self.frames.push(Frame::new(
             method_name,
             method_descriptor,
@@ -211,7 +216,7 @@ impl Frame {
             bail!("index out of bounds of local variables")
         }
 
-        self.local_variables.insert(index, value);
+        self.local_variables[index] = value;
         Ok(())
     }
 

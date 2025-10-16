@@ -145,15 +145,13 @@ impl Jvm {
             let descriptor = class.method_descriptor(&method)?;
 
             let operands = self.stack.pop_operands(descriptor.parameters.len())?;
-            let code = method
-                .code()
-                .context("method {method_name} has no code")?
-                .to_vec();
+            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
             self.stack.push(
                 "initPhase1".to_string(),
                 descriptor,
                 operands,
-                code,
+                max_locals,
+                code.to_vec(),
                 identifier.clone(),
             );
             self.execute()?;
@@ -217,15 +215,15 @@ impl Jvm {
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
             let descriptor = class.method_descriptor(clinit_method)?;
-            let code = clinit_method
+            let (code, max_locals) = clinit_method
                 .code()
-                .context("no code found for <clinit> method")?
-                .to_vec();
+                .context("no code found for <clinit> method")?;
             self.stack.push(
                 "<clinit>".to_string(),
                 descriptor,
                 vec![],
-                code,
+                max_locals,
+                code.to_vec(),
                 class.identifier().clone(),
             );
             self.execute()?;
@@ -374,6 +372,7 @@ impl Jvm {
                     self.invoke_interface(index, count)?
                 }
                 Instruction::Pop => self.pop()?,
+                Instruction::Ixor => self.ixor()?,
             }
 
             // TODO: this is very brittle
@@ -406,6 +405,13 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn ixor(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        self.stack.push_operand(FrameValue::Int(value1 ^ value2))
     }
 
     fn check_cast(&mut self, index: &CpIndex) -> Result<()> {
@@ -982,15 +988,13 @@ impl Jvm {
         let method_name = class.method_name(&method)?.to_string();
 
         if !method.is_native() {
-            let code = method
-                .code()
-                .context("method {method_name} has no code")?
-                .to_vec();
+            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
             self.stack.push(
                 method_name,
                 method_descriptor,
                 operands,
-                code,
+                max_locals,
+                code.to_vec(),
                 class.identifier().clone(),
             );
             self.execute()
@@ -1023,9 +1027,15 @@ impl Jvm {
         let class_identifier = self.class_identifier_from_reference(reference)?;
         let class = self.class(&class_identifier)?;
         let method = class.method(&name, &descriptor)?;
-        let code = method.code().context("method {name} has no code")?.to_vec();
-        self.stack
-            .push(name, method_descriptor, operands, code, class_identifier);
+        let (code, max_locals) = method.code().context("method {name} has no code")?;
+        self.stack.push(
+            name,
+            method_descriptor,
+            operands,
+            max_locals,
+            code.to_vec(),
+            class_identifier,
+        );
         self.execute()
     }
 
@@ -1057,12 +1067,15 @@ impl Jvm {
                 Ok(())
             }
         } else {
-            let code = method
-                .code()
-                .context("method {method_name} has no code")?
-                .to_vec();
-            self.stack
-                .push(name, descriptor, operands, code, class_identifier);
+            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
+            self.stack.push(
+                name,
+                descriptor,
+                operands,
+                max_locals,
+                code.to_vec(),
+                class_identifier,
+            );
             self.execute()
         }
     }
@@ -1217,15 +1230,15 @@ impl Jvm {
             let operands = self
                 .stack
                 .pop_operands(method_descriptor.parameters.len() + 1)?;
-            let code = method
+            let (code, max_locals) = method
                 .code()
-                .context(format!("no code found for {name} method"))?
-                .to_vec();
+                .context(format!("no code found for {name} method"))?;
             self.stack.push(
                 name.to_string(),
                 method_descriptor,
                 operands,
-                code,
+                max_locals,
+                code.to_vec(),
                 class.identifier().clone(),
             );
             self.execute()
