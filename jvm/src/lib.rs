@@ -1465,6 +1465,17 @@ impl Jvm {
                         class_identifier.clone(),
                     ))))
                 }
+                "hashCode" => {
+                    // TODO: this is ultra wrong, need to hash values not references
+                    let mut hasher = DefaultHasher::new();
+                    operands
+                        .first()
+                        .context("operands are empty")?
+                        .reference()?
+                        .hash(&mut hasher);
+                    let value = hasher.finish();
+                    Ok(Some(FrameValue::Int(value as i32)))
+                }
                 _ => bail!("native method not implemented"),
             }
         } else {
@@ -1570,6 +1581,20 @@ impl Jvm {
 
         if let Ok(m) = class.method(name, descriptor) {
             return Ok(m.clone());
+        }
+
+        let object_class = self.class(&ClassIdentifier::new("java.lang.Object")?)?;
+        if let Ok(object_method) = object_class.method(name, descriptor)
+            && object_method.is_public()
+            && !object_method.is_static()
+        {
+            return Ok(object_method.clone());
+        }
+
+        for super_interface in class.super_interfaces()? {
+            if let Ok(method) = self.resolve_interface_method(&super_interface, name, descriptor) {
+                return Ok(method.clone());
+            }
         }
 
         bail!("TODO: 5.4.3.4 interface method resolution")

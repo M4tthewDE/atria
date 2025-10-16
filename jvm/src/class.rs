@@ -72,6 +72,15 @@ impl Class {
         )
     }
 
+    pub fn super_interfaces(&self) -> Result<Vec<ClassIdentifier>> {
+        Ok(self
+            .class_file
+            .interfaces
+            .iter()
+            .map(|i| self.class_identifier(i))
+            .collect::<Result<Vec<ClassIdentifier>>>()?)
+    }
+
     pub fn method(&self, name: &str, descriptor: &str) -> Result<&Method> {
         self.class_file.method(name, descriptor)
     }

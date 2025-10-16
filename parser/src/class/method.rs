@@ -85,6 +85,10 @@ impl Method {
         self.access_flags.contains(&AccessFlag::Static)
     }
 
+    pub fn is_public(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Public)
+    }
+
     pub fn is_abstract(&self) -> bool {
         self.access_flags.contains(&AccessFlag::Abstract)
     }
