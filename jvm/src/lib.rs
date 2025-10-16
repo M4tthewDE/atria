@@ -291,6 +291,9 @@ impl Jvm {
                 Instruction::L2i => self.l2i()?,
                 Instruction::IfIcmplt(offset) => self.if_icmplt(offset)?,
                 Instruction::Iinc(index, constant) => self.iinc(index as usize, constant)?,
+                Instruction::Iushr => self.iushr()?,
+                Instruction::Ifge(offset) => self.if_ge(offset)?,
+                Instruction::Iadd => self.iadd()?,
             }
 
             // TODO: this is very brittle
@@ -304,12 +307,21 @@ impl Jvm {
                 | Instruction::Ifgt(_)
                 | Instruction::IfIcmpge(_)
                 | Instruction::IfIcmplt(_)
+                | Instruction::Ifge(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
         }
 
         Ok(())
+    }
+
+    fn iushr(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        let result = ((value1 as u32) >> (value2 & 31)) as i32;
+        self.stack.push_operand(FrameValue::Int(result))
     }
 
     fn iinc(&mut self, index: usize, constant: i8) -> Result<()> {
@@ -359,6 +371,12 @@ impl Jvm {
     fn d2l(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?.double()?;
         self.stack.push_operand(FrameValue::Long(value as i64))
+    }
+
+    fn iadd(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+        self.stack.push_operand(FrameValue::Int(value1 + value2))
     }
 
     fn dadd(&mut self) -> Result<()> {
@@ -525,7 +543,7 @@ impl Jvm {
     fn iload(&mut self, index: u8) -> Result<()> {
         let value = self.stack.local_variable(index.into())?;
 
-        if !matches!(value, FrameValue::Int(_)) {
+        if value.int().is_err() {
             bail!("value has to be int, is {value:?}");
         }
 
@@ -556,6 +574,15 @@ impl Jvm {
         let field_value = class.get_static_field_value(&name)?;
 
         self.stack.push_operand(field_value.into())
+    }
+
+    fn if_ge(&mut self, offset: i16) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        if operand.int()? >= 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
     }
 
     fn if_lt(&mut self, offset: i16) -> Result<()> {
@@ -823,7 +850,7 @@ impl Jvm {
     fn istore(&mut self, index: u8) -> Result<()> {
         let int = self.stack.pop_operand()?;
         if int.int().is_err() {
-            bail!("TODO: istore objectref has to be int")
+            bail!("istore value has to be int")
         }
 
         self.stack.set_local_variable(index.into(), int)

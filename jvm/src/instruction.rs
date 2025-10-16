@@ -79,6 +79,9 @@ pub enum Instruction {
     L2i,
     IfIcmplt(i16),
     Iinc(u8, i8),
+    Iushr,
+    Ifge(i16),
+    Iadd,
 }
 
 impl Instruction {
@@ -102,6 +105,7 @@ impl Instruction {
             0xe => Instruction::Dconst(0.0),
             0xf => Instruction::Dconst(1.0),
             0x14 => Instruction::Ldc2W(cp_index(bytes)?),
+            0x15 => Instruction::Iload(*bytes.get(1).context("premature end of code")?),
             0x16 => Instruction::Lload(*bytes.get(1).context("premature end of code")?),
             0x1a => Instruction::Iload(0),
             0x1b => Instruction::Iload(1),
@@ -115,6 +119,7 @@ impl Instruction {
             0x2b => Instruction::Aload(1),
             0x2c => Instruction::Aload(2),
             0x2d => Instruction::Aload(3),
+            0x36 => Instruction::Istore(*bytes.get(1).context("premature end of code")?),
             0x37 => Instruction::Lstore(*bytes.get(1).context("premature end of code")?),
             0x3b => Instruction::Istore(0),
             0x3c => Instruction::Istore(1),
@@ -129,9 +134,11 @@ impl Instruction {
             0x54 => Instruction::Bastore,
             0x55 => Instruction::Castore,
             0x59 => Instruction::Dup,
+            0x60 => Instruction::Iadd,
             0x63 => Instruction::Dadd,
             0x64 => Instruction::Isub,
             0x6e => Instruction::Fdiv,
+            0x7c => Instruction::Iushr,
             0x7e => Instruction::Iand,
             0x84 => Instruction::Iinc(
                 *bytes.get(1).context("premature end of code")?,
@@ -147,6 +154,7 @@ impl Instruction {
             0x99 => Instruction::Ifeq(offset(bytes)?),
             0x9a => Instruction::IfNe(offset(bytes)?),
             0x9b => Instruction::Iflt(offset(bytes)?),
+            0x9c => Instruction::Ifge(offset(bytes)?),
             0x9d => Instruction::Ifgt(offset(bytes)?),
             0x9e => Instruction::Ifle(offset(bytes)?),
             0xa1 => Instruction::IfIcmplt(offset(bytes)?),
@@ -233,6 +241,9 @@ impl Instruction {
             Self::L2i => 1,
             Self::IfIcmplt(_) => 3,
             Self::Iinc(_, _) => 3,
+            Self::Iushr => 1,
+            Self::Ifge(_) => 3,
+            Self::Iadd => 1,
         }
     }
 }
