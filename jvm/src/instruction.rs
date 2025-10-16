@@ -120,6 +120,7 @@ pub enum Instruction {
     Lload2,
     Lload3,
     Lmul,
+    Imul,
 }
 
 impl Instruction {
@@ -186,6 +187,7 @@ impl Instruction {
             0x60 => Instruction::Iadd,
             0x63 => Instruction::Dadd,
             0x64 => Instruction::Isub,
+            0x68 => Instruction::Imul,
             0x69 => Instruction::Lmul,
             0x6e => Instruction::Fdiv,
             0x7a => Instruction::Ishr,
@@ -340,6 +342,7 @@ impl Instruction {
             Self::Lload2 => 1,
             Self::Lload3 => 1,
             Self::Lmul => 1,
+            Self::Imul => 1,
             Self::Lshr => 1,
             Self::Land => 1,
         }

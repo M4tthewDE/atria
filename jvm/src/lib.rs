@@ -355,6 +355,7 @@ impl Jvm {
                 Instruction::Lload2 => self.lload(2)?,
                 Instruction::Lload3 => self.lload(3)?,
                 Instruction::Lmul => self.lmul()?,
+                Instruction::Imul => self.imul()?,
             }
 
             // TODO: this is very brittle
@@ -500,6 +501,13 @@ impl Jvm {
         let local_variable = self.stack.local_variable(index)?.int()?;
         self.stack
             .set_local_variable(index, FrameValue::Int(local_variable + constant as i32))
+    }
+
+    fn imul(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+        self.stack
+            .push_operand(FrameValue::Int(value1.wrapping_mul(value2)))
     }
 
     fn lmul(&mut self) -> Result<()> {
@@ -1343,6 +1351,7 @@ impl Jvm {
                 "isSharingEnabled0" => Ok(Some(FrameValue::Int(0))),
                 // TODO: provide a proper seed
                 "getRandomSeedForDumping" => Ok(Some(FrameValue::Long(0))),
+                "initializeFromArchive" => Ok(None),
                 _ => bail!("native method not implemented"),
             }
         } else {
