@@ -77,7 +77,7 @@ impl Stack {
     pub fn set_local_variable(&mut self, index: usize, value: FrameValue) -> Result<()> {
         let frame = self.frames.last_mut().context("no frame found")?;
 
-        if matches!(value, FrameValue::Long(_)) {
+        if matches!(value, FrameValue::Long(_)) || matches!(value, FrameValue::Double(_)) {
             frame.set_local_variable(index, value)?;
             frame.set_local_variable(index + 1, FrameValue::Reserved)
         } else {
@@ -141,11 +141,20 @@ impl Frame {
         code: Vec<u8>,
         class: ClassIdentifier,
     ) -> Self {
+        let mut lvs = Vec::new();
+        for lv in &local_variables {
+            if matches!(lv, FrameValue::Long(_)) || matches!(lv, FrameValue::Double(_)) {
+                lvs.push(lv.clone());
+                lvs.push(FrameValue::Reserved);
+            } else {
+                lvs.push(lv.clone());
+            }
+        }
         Self {
             method_name,
             method_descriptor,
             operand_stack: Vec::new(),
-            local_variables,
+            local_variables: lvs,
             code,
             pc: 0,
             class,
