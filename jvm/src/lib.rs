@@ -989,6 +989,7 @@ impl Jvm {
             Ok(())
         }
     }
+
     fn invoke_interface(&mut self, index: &CpIndex, _: u8) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
         let method = self.resolve_interface_method(&class_identifier, &name, &descriptor)?;
@@ -1353,6 +1354,24 @@ impl Jvm {
                         )))),
                         _ => bail!("invalid primitive class name: '{name}'"),
                     }
+                }
+                "forName0" => {
+                    let heap_id = operands
+                        .first()
+                        .context("no first operand")?
+                        .reference()?
+                        .heap_id()?;
+                    let byte_value = self.heap.get_field(heap_id, "value")?;
+                    let (_, primitive_array) =
+                        self.heap.get_primitive_array(byte_value.heap_id()?)?;
+                    let bytes: Vec<u8> = primitive_array
+                        .iter()
+                        .map(|p| p.byte())
+                        .collect::<Result<Vec<u8>>>()?;
+                    let name = String::from_utf8(bytes)?;
+                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                        ClassIdentifier::new(&name)?,
+                    ))))
                 }
                 _ => bail!("native method not implemented"),
             }
