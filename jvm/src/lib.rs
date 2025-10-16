@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::thread;
 use std::time::Instant;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
@@ -40,6 +41,7 @@ pub struct Jvm {
     main_class: ClassIdentifier,
     heap: Heap,
     creation_time: Instant,
+    current_thread_object: Option<HeapId>,
 }
 
 impl Jvm {
@@ -57,6 +59,7 @@ impl Jvm {
             main_class,
             heap: Heap::default(),
             creation_time: Instant::now(),
+            current_thread_object: None,
         })
     }
 
@@ -87,6 +90,13 @@ impl Jvm {
     pub fn run(&mut self) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
+        let thread_object_heap_id = self.new_thread_object(
+            thread::current()
+                .name()
+                .context("unable to fetch thread name")?
+                .to_string(),
+        )?;
+        self.current_thread_object = Some(thread_object_heap_id);
         let main_class = &self.main_class.clone();
         self.initialize(main_class)?;
         bail!("TODO: run")
@@ -1363,6 +1373,11 @@ impl Jvm {
         } else if class.identifier() == &ClassIdentifier::new("java.lang.Thread")? {
             match name {
                 "registerNatives" => Ok(None),
+                "currentThread" => Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
+                    self.current_thread_object
+                        .clone()
+                        .context("no current thread found")?,
+                )))),
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("java.lang.System")? {
@@ -1417,6 +1432,21 @@ impl Jvm {
         let byte_array = FrameValue::Reference(ReferenceValue::HeapItem(heap_item));
         self.heap
             .set_field(&object_id, "value", byte_array.into())?;
+        Ok(object_id)
+    }
+
+    fn new_thread_object(&mut self, name: String) -> Result<HeapId> {
+        let name_string = self.new_string(name)?;
+        let thread_identifier = ClassIdentifier::new("java.lang.Thread")?;
+        let class = self.resolve_class(&thread_identifier)?;
+
+        let fields = self.default_instance_fields(&class)?;
+        let object_id = self.heap.allocate(class.identifier().clone(), fields);
+        self.heap.set_field(
+            &object_id,
+            "name",
+            FieldValue::Reference(ReferenceValue::HeapItem(name_string)),
+        )?;
         Ok(object_id)
     }
 
