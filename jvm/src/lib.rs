@@ -224,7 +224,10 @@ impl Jvm {
                     self.stack.pop()?;
                     break;
                 }
-                Instruction::Aload(index) => self.aload(index)?,
+                Instruction::Aload0 => self.aload(0)?,
+                Instruction::Aload1 => self.aload(1)?,
+                Instruction::Aload2 => self.aload(2)?,
+                Instruction::Aload3 => self.aload(3)?,
                 Instruction::GetField(ref index) => self.get_field(index)?,
                 Instruction::Astore(index) => self.astore(index)?,
                 Instruction::IfNull(offset) => self.if_null(offset)?,
@@ -271,7 +274,14 @@ impl Jvm {
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
                 Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
                 Instruction::Ifgt(offset) => self.if_gt(offset)?,
-                Instruction::Fload(index) => self.fload(index)?,
+                Instruction::Fload0 => self.fload(0)?,
+                Instruction::Fload1 => self.fload(1)?,
+                Instruction::Fload2 => self.fload(2)?,
+                Instruction::Fload3 => self.fload(3)?,
+                Instruction::Iload0 => self.iload(0)?,
+                Instruction::Iload1 => self.iload(1)?,
+                Instruction::Iload2 => self.iload(2)?,
+                Instruction::Iload3 => self.iload(3)?,
                 Instruction::Fconst(val) => self.stack.push_operand(FrameValue::Float(val))?,
                 Instruction::Fcmpl => self.fcmpl()?,
                 Instruction::Ifle(offset) => self.if_le(offset)?,

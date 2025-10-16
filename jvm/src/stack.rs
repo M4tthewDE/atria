@@ -40,6 +40,10 @@ impl Stack {
         Ok(())
     }
 
+    pub fn operands(&self) -> Result<&Vec<FrameValue>> {
+        Ok(&self.frames.last().context("no frame found")?.operand_stack)
+    }
+
     pub fn pop_operands(&mut self, n: usize) -> Result<Vec<FrameValue>> {
         let frame = self.frames.last_mut().context("no frame found")?;
         frame.pop_operands(n)
