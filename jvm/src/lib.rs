@@ -372,6 +372,7 @@ impl Jvm {
                 Instruction::InvokeInterface(ref index, count) => {
                     self.invoke_interface(index, count)?
                 }
+                Instruction::Pop => self.pop()?,
             }
 
             // TODO: this is very brittle
@@ -392,6 +393,15 @@ impl Jvm {
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
+        }
+
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        if matches!(value, FrameValue::Long(_)) || matches!(value, FrameValue::Double(_)) {
+            bail!("pop value has to be of computational type with category 1, is {value:?}");
         }
 
         Ok(())

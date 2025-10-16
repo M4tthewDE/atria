@@ -193,7 +193,7 @@ impl Frame {
     fn local_variable(&self, index: usize) -> Result<FrameValue> {
         self.local_variables
             .get(index)
-            .context("no local variable at index {index}")
+            .context(format!("no local variable at index {index}"))
             .cloned()
     }
 

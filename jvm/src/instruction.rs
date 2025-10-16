@@ -29,6 +29,7 @@ pub enum Instruction {
     InvokeStatic(CpIndex),
     Anewarray(CpIndex),
     Aload(u8),
+    Pop,
     Aload0,
     Aload1,
     Aload2,
@@ -188,6 +189,7 @@ impl Instruction {
             0x53 => Instruction::Aastore,
             0x54 => Instruction::Bastore,
             0x55 => Instruction::Castore,
+            0x57 => Instruction::Pop,
             0x59 => Instruction::Dup,
             0x60 => Instruction::Iadd,
             0x63 => Instruction::Dadd,
@@ -357,6 +359,7 @@ impl Instruction {
             Self::Land => 1,
             Self::InvokeInterface(_, _) => 5,
             Self::Aload(_) => 2,
+            Self::Pop => 1,
         }
     }
 }
