@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::thread;
 use std::time::Instant;
 use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
@@ -1419,6 +1420,16 @@ impl Jvm {
                     let elapsed = now.duration_since(self.creation_time).as_nanos();
                     Ok(Some(FrameValue::Long(elapsed as i64)))
                 }
+                "identityHashCode" => {
+                    let mut hasher = DefaultHasher::new();
+                    operands
+                        .first()
+                        .context("operands are empty")?
+                        .reference()?
+                        .hash(&mut hasher);
+                    let value = hasher.finish();
+                    Ok(Some(FrameValue::Int(value as i32)))
+                }
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.CDS")? {
@@ -1437,6 +1448,21 @@ impl Jvm {
                     let caller_class = self.stack.caller_class()?;
                     Ok(Some(FrameValue::Reference(ReferenceValue::Class(
                         caller_class.clone(),
+                    ))))
+                }
+                _ => bail!("native method not implemented"),
+            }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.Object")? {
+            match name {
+                "getClass" => {
+                    let heap_id = operands
+                        .first()
+                        .context("operands are empty")?
+                        .reference()?
+                        .heap_id()?;
+                    let class_identifier = self.heap.get(heap_id)?.class_identifier()?;
+                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
+                        class_identifier.clone(),
                     ))))
                 }
                 _ => bail!("native method not implemented"),
@@ -1714,7 +1740,7 @@ impl Debug for ClassIdentifier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub enum ReferenceValue {
     HeapItem(HeapId),
     Class(ClassIdentifier),
