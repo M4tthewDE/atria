@@ -97,6 +97,9 @@ pub enum Instruction {
     ArrayLength,
     Ishr,
     Baload,
+    I2c,
+    IfIcmpne(i16),
+    IfAcmpne(i16),
 }
 
 impl Instruction {
@@ -168,6 +171,7 @@ impl Instruction {
             0x89 => Instruction::L2f,
             0x8f => Instruction::D2l,
             0x8d => Instruction::F2d,
+            0x92 => Instruction::I2c,
             0x94 => Instruction::Lcmp,
             0x95 => Instruction::Fcmpl,
             0x99 => Instruction::Ifeq(offset(bytes)?),
@@ -177,8 +181,10 @@ impl Instruction {
             0x9d => Instruction::Ifgt(offset(bytes)?),
             0x9e => Instruction::Ifle(offset(bytes)?),
             0x9f => Instruction::IfIcmpeq(offset(bytes)?),
+            0xa0 => Instruction::IfIcmpne(offset(bytes)?),
             0xa1 => Instruction::IfIcmplt(offset(bytes)?),
             0xa2 => Instruction::IfIcmpge(offset(bytes)?),
+            0xa6 => Instruction::IfAcmpne(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
@@ -280,6 +286,9 @@ impl Instruction {
             Self::ArrayLength => 1,
             Self::Ishr => 1,
             Self::Baload => 1,
+            Self::I2c => 1,
+            Self::IfIcmpne(_) => 3,
+            Self::IfAcmpne(_) => 3,
         }
     }
 }

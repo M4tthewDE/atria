@@ -108,7 +108,7 @@ impl PrimitiveArrayType {
 #[derive(Debug, Clone)]
 pub enum PrimitiveArrayValue {
     Boolean(bool),
-    Char(u8),
+    Char(u16),
     Float(f32),
     Double(f64),
     Byte(u8),

@@ -329,6 +329,9 @@ impl Jvm {
                 Instruction::ArrayLength => self.array_length()?,
                 Instruction::Ishr => self.ishr()?,
                 Instruction::Baload => self.baload()?,
+                Instruction::I2c => self.i2c()?,
+                Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
+                Instruction::IfAcmpne(offset) => self.if_acmpne(offset)?,
             }
 
             // TODO: this is very brittle
@@ -344,6 +347,8 @@ impl Jvm {
                 | Instruction::IfIcmplt(_)
                 | Instruction::Ifge(_)
                 | Instruction::IfIcmpeq(_)
+                | Instruction::IfIcmpne(_)
+                | Instruction::IfAcmpne(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
@@ -435,6 +440,12 @@ impl Jvm {
         }
 
         self.stack.set_local_variable(index.into(), value)
+    }
+
+    fn i2c(&mut self) -> Result<()> {
+        let int = self.stack.pop_operand()?.int()?;
+        let char = int as u16;
+        self.stack.push_operand(FrameValue::Int(char as i32))
     }
 
     fn l2i(&mut self) -> Result<()> {
@@ -662,6 +673,28 @@ impl Jvm {
     fn if_lt(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? < 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_icmpne(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 != value2 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_acmpne(&mut self, offset: i16) -> Result<()> {
+        let operand2 = self.stack.pop_operand()?;
+        let operand1 = self.stack.pop_operand()?;
+
+        if operand1.reference()? != operand2.reference()? {
             self.stack.offset_pc(offset)
         } else {
             self.stack.offset_pc(3)
@@ -1422,7 +1455,7 @@ impl Debug for ClassIdentifier {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ReferenceValue {
     HeapItem(HeapId),
     Class(ClassIdentifier),
