@@ -93,6 +93,7 @@ pub enum Instruction {
     Ifge(i16),
     Iadd,
     Lconst(i64),
+    IfIcmpeq(i16),
 }
 
 impl Instruction {
@@ -170,6 +171,7 @@ impl Instruction {
             0x9c => Instruction::Ifge(offset(bytes)?),
             0x9d => Instruction::Ifgt(offset(bytes)?),
             0x9e => Instruction::Ifle(offset(bytes)?),
+            0x9f => Instruction::IfIcmpeq(offset(bytes)?),
             0xa1 => Instruction::IfIcmplt(offset(bytes)?),
             0xa2 => Instruction::IfIcmpge(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
@@ -268,6 +270,7 @@ impl Instruction {
             Self::Aload2 => 1,
             Self::Aload3 => 1,
             Self::Lconst(_) => 1,
+            Self::IfIcmpeq(_) => 3,
         }
     }
 }

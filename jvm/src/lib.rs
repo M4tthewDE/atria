@@ -124,6 +124,26 @@ impl Jvm {
         }
 
         self.execute_clinit(&class)?;
+        if identifier == &ClassIdentifier::new("java.lang.System")? {
+            let method = self.resolve_method(identifier, "initPhase1", "()V")?;
+            let class = self.class(identifier)?;
+            let descriptor = class.method_descriptor(&method)?;
+
+            let operands = self.stack.pop_operands(descriptor.parameters.len())?;
+            let code = method
+                .code()
+                .context("method {method_name} has no code")?
+                .to_vec();
+            self.stack.push(
+                "initPhase1".to_string(),
+                descriptor,
+                operands,
+                code,
+                identifier.clone(),
+            );
+            self.execute()?;
+        }
+
         self.classes
             .get_mut(identifier)
             .context("class {identifier} not found")?
@@ -305,6 +325,7 @@ impl Jvm {
                 Instruction::Ifge(offset) => self.if_ge(offset)?,
                 Instruction::Iadd => self.iadd()?,
                 Instruction::Lconst(value) => self.stack.push_operand(FrameValue::Long(value))?,
+                Instruction::IfIcmpeq(offset) => self.if_icmpeq(offset)?,
             }
 
             // TODO: this is very brittle
@@ -319,6 +340,7 @@ impl Jvm {
                 | Instruction::IfIcmpge(_)
                 | Instruction::IfIcmplt(_)
                 | Instruction::Ifge(_)
+                | Instruction::IfIcmpeq(_)
                 | Instruction::Goto(_) => {}
                 _ => self.stack.offset_pc(instruction.length() as i16)?,
             }
@@ -599,6 +621,17 @@ impl Jvm {
     fn if_lt(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? < 0 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_icmpeq(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 == value2 {
             self.stack.offset_pc(offset)
         } else {
             self.stack.offset_pc(3)
