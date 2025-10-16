@@ -332,6 +332,8 @@ impl Jvm {
                 Instruction::I2c => self.i2c()?,
                 Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
                 Instruction::IfAcmpne(offset) => self.if_acmpne(offset)?,
+                Instruction::Instanceof(ref index) => self.instance_of(index)?,
+                Instruction::Checkcast(ref index) => self.check_cast(index)?,
             }
 
             // TODO: this is very brittle
@@ -355,6 +357,68 @@ impl Jvm {
         }
 
         Ok(())
+    }
+
+    fn check_cast(&mut self, index: &CpIndex) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let object_ref = operand.reference()?;
+
+        if object_ref.is_null() {
+            return self.stack.push_operand(operand);
+        }
+
+        let current_class = self.current_class()?;
+
+        let heap_item = self.heap.get(object_ref.heap_id()?)?.clone();
+        if heap_item.is_array() {
+            bail!("TOOD: instanceof for arrays")
+        }
+
+        match current_class.cp_item(index)? {
+            CpInfo::Class { name_index } => {
+                let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
+                self.resolve_class(&identifier)?;
+                let object_identifier = heap_item.class_identifier()?;
+
+                if object_identifier == &identifier {
+                    return self.stack.push_operand(operand);
+                }
+
+                bail!("TODO: check super classes")
+            }
+            item => bail!("invalid instanceof type {item:?}"),
+        }
+    }
+
+    fn instance_of(&mut self, index: &CpIndex) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let object_ref = operand.reference()?;
+
+        if object_ref.is_null() {
+            return self.stack.push_operand(FrameValue::Int(0));
+        }
+
+        let current_class = self.current_class()?;
+
+        let heap_item = self.heap.get(object_ref.heap_id()?)?.clone();
+        if heap_item.is_array() {
+            bail!("TOOD: instanceof for arrays")
+        }
+
+        match current_class.cp_item(index)? {
+            CpInfo::Class { name_index } => {
+                let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
+                self.resolve_class(&identifier)?;
+                let object_identifier = heap_item.class_identifier()?;
+
+                if object_identifier == &identifier {
+                    return self.stack.push_operand(FrameValue::Int(1));
+                }
+
+                bail!("TODO: check super classes")
+            }
+            item => bail!("invalid instanceof type {item:?}"),
+        }
     }
 
     fn baload(&mut self) -> Result<()> {

@@ -100,6 +100,8 @@ pub enum Instruction {
     I2c,
     IfIcmpne(i16),
     IfAcmpne(i16),
+    Instanceof(CpIndex),
+    Checkcast(CpIndex),
 }
 
 impl Instruction {
@@ -202,6 +204,8 @@ impl Instruction {
             0xbc => Instruction::Newarray(*bytes.get(1).context("premature end of code")?),
             0xbd => Instruction::Anewarray(cp_index(bytes)?),
             0xbe => Instruction::ArrayLength,
+            0xc0 => Instruction::Checkcast(cp_index(bytes)?),
+            0xc1 => Instruction::Instanceof(cp_index(bytes)?),
             0xc6 => Instruction::IfNull(offset(bytes)?),
             0xc7 => Instruction::IfNonNull(offset(bytes)?),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
@@ -289,6 +293,8 @@ impl Instruction {
             Self::I2c => 1,
             Self::IfIcmpne(_) => 3,
             Self::IfAcmpne(_) => 3,
+            Self::Instanceof(_) => 3,
+            Self::Checkcast(_) => 3,
         }
     }
 }
