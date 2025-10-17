@@ -53,15 +53,14 @@ impl JvmThread {
     }
 
     pub fn run_with_class(mut thread: Self, main_class: ClassIdentifier) -> JoinHandle<Result<()>> {
-        let handle = std::thread::spawn(move || thread.run_main(&main_class));
-
-        handle
+        std::thread::spawn(move || thread.run_main(&main_class))
     }
 
     pub fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
-        let thread_object_heap_id = self.new_thread_object(self.name.to_string())?;
+        let thread_object_heap_id =
+            self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
         self.initialize(main_class)?;
         bail!("TODO: run")
@@ -502,6 +501,7 @@ impl JvmThread {
                 }
                 Instruction::Pop => self.pop()?,
                 Instruction::Ixor => self.ixor()?,
+                Instruction::MonitorEnter => self.monitor_enter()?,
             }
 
             // TODO: this is very brittle
@@ -534,6 +534,18 @@ impl JvmThread {
         }
 
         Ok(())
+    }
+
+    fn monitor_enter(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        dbg!(&operand);
+        let heap_item = self.heap_get(operand.reference()?.heap_id()?)?;
+        let object = heap_item.object()?;
+
+        if object.entry_count() == 0 {
+            bail!("TODO: enter ")
+        }
+        bail!("TODO: monitorenter")
     }
 
     fn ixor(&mut self) -> Result<()> {
@@ -1106,6 +1118,12 @@ impl JvmThread {
         let operands = self
             .stack
             .pop_operands(method_descriptor.parameters.len() + 1)?;
+
+        let objectref = operands.first().context("no objectref found")?;
+        if objectref.reference()?.is_null() {
+            bail!("TODO: throw NullPointerException");
+        }
+
         let class = self.class(&class_identifier)?;
         let method_name = class.method_name(&method)?.to_string();
 
@@ -1641,8 +1659,9 @@ impl JvmThread {
         Ok(object_id)
     }
 
-    fn new_thread_object(&mut self, name: String) -> Result<HeapId> {
+    fn new_thread_object(&mut self, name: String, thread_group_name: String) -> Result<HeapId> {
         let name_string = self.new_string(name)?;
+        let thread_group = self.new_thread_group_object(thread_group_name)?;
         let thread_identifier = ClassIdentifier::new("java.lang.Thread")?;
         let class = self.resolve_class(&thread_identifier)?;
 
@@ -1653,6 +1672,27 @@ impl JvmThread {
             "name",
             FieldValue::Reference(ReferenceValue::HeapItem(name_string)),
         )?;
+        self.heap_set_field(
+            &object_id,
+            "group",
+            FieldValue::Reference(ReferenceValue::HeapItem(thread_group)),
+        )?;
+        Ok(object_id)
+    }
+
+    fn new_thread_group_object(&mut self, name: String) -> Result<HeapId> {
+        let name_string = self.new_string(name)?;
+        let thread_identifier = ClassIdentifier::new("java.lang.ThreadGroup")?;
+        let class = self.resolve_class(&thread_identifier)?;
+
+        let fields = self.default_instance_fields(&class)?;
+        let object_id = self.allocate(class.identifier().clone(), fields)?;
+        self.heap_set_field(
+            &object_id,
+            "name",
+            FieldValue::Reference(ReferenceValue::HeapItem(name_string)),
+        )?;
+        self.heap_set_field(&object_id, "maxPriority", FieldValue::Integer(10))?;
         Ok(object_id)
     }
 

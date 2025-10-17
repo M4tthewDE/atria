@@ -5,7 +5,6 @@ use std::{collections::HashMap, fmt::Display, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use parser::class::descriptor::{BaseType, FieldDescriptor, FieldType};
-use tracing::error;
 use zip::ZipArchive;
 
 use crate::heap::{Heap, HeapId};
@@ -24,6 +23,7 @@ pub mod instruction;
 pub mod jar;
 pub mod jdk;
 pub mod loader;
+mod monitor;
 pub mod stack;
 pub mod thread;
 

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 use tracing::debug;
 
-use crate::{ClassIdentifier, ReferenceValue, class::FieldValue};
+use crate::{ClassIdentifier, ReferenceValue, class::FieldValue, monitor::Monitor};
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone)]
 pub struct HeapId(u64);
@@ -19,6 +19,7 @@ impl From<u64> for HeapId {
 pub struct Object {
     class_identifier: ClassIdentifier,
     fields: HashMap<String, FieldValue>,
+    monitor: Monitor,
 }
 
 impl Object {
@@ -26,11 +27,16 @@ impl Object {
         Self {
             class_identifier,
             fields,
+            monitor: Monitor::default(),
         }
     }
 
     pub fn class(&self) -> &ClassIdentifier {
         &self.class_identifier
+    }
+
+    pub fn entry_count(&self) -> u64 {
+        self.monitor.entry_count()
     }
 }
 
@@ -61,6 +67,14 @@ impl HeapItem {
                 bail!("TODO: what is the class of a primitive array?")
             }
         })
+    }
+
+    pub fn object(&self) -> Result<&Object> {
+        if let Self::Object(object) = self {
+            Ok(object)
+        } else {
+            bail!("heap item is not a object, is {self:?}")
+        }
     }
 }
 
