@@ -38,6 +38,7 @@ pub enum Instruction {
     Astore(u8),
     IfNull(i16),
     Areturn,
+    Dreturn,
     InvokeDynamic(CpIndex),
     New(CpIndex),
     Dup,
@@ -134,6 +135,7 @@ pub enum Instruction {
     MonitorExit,
     DupX1,
     Aaload,
+    Lshl,
 }
 
 impl Instruction {
@@ -210,6 +212,7 @@ impl Instruction {
             0x68 => Instruction::Imul,
             0x69 => Instruction::Lmul,
             0x6e => Instruction::Fdiv,
+            0x79 => Instruction::Lshl,
             0x7a => Instruction::Ishr,
             0x7b => Instruction::Lshr,
             0x7c => Instruction::Iushr,
@@ -244,6 +247,7 @@ impl Instruction {
             0xa7 => Instruction::Goto(offset(bytes)?),
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
+            0xaf => Instruction::Dreturn,
             0xb0 => Instruction::Areturn,
             0xb1 => Instruction::Return,
             0xb2 => Instruction::GetStatic(cp_index(bytes)?),
@@ -387,6 +391,8 @@ impl Instruction {
             Self::MonitorExit => 1,
             Self::DupX1 => 1,
             Self::Aaload => 1,
+            Self::Dreturn => 1,
+            Self::Lshl => 1,
         }
     }
 }

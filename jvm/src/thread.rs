@@ -491,6 +491,12 @@ impl JvmThread {
                     self.stack.push_operand(object_ref)?;
                     break;
                 }
+                Instruction::Dreturn => {
+                    let double = self.stack.pop_operand()?;
+                    self.stack.pop()?;
+                    self.stack.push_operand(double)?;
+                    break;
+                }
                 Instruction::InvokeDynamic(ref index) => self.invoke_dynamic(index)?,
                 Instruction::IfNonNull(offset) => self.if_non_null(offset)?,
                 Instruction::Ireturn => {
@@ -562,6 +568,7 @@ impl JvmThread {
                 Instruction::ArrayLength => self.array_length()?,
                 Instruction::Ishr => self.ishr()?,
                 Instruction::Lshr => self.lshr()?,
+                Instruction::Lshl => self.lshl()?,
                 Instruction::Baload => self.baload()?,
                 Instruction::Aaload => self.aaload()?,
                 Instruction::I2c => self.i2c()?,
@@ -808,6 +815,14 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.long()?;
 
         let result = value1 >> (value2 & 63);
+        self.stack.push_operand(FrameValue::Long(result))
+    }
+
+    fn lshl(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        let result = value1 << (value2 & 63);
         self.stack.push_operand(FrameValue::Long(result))
     }
 
@@ -1927,7 +1942,7 @@ impl JvmThread {
                 "floatToRawIntBits" => {
                     let float = operands
                         .first()
-                        .context("no float to convert to raw int bits")?
+                        .context("no float to convert to int")?
                         .float()?;
                     Ok(Some(FrameValue::Int(float as i32)))
                 }
@@ -1940,9 +1955,16 @@ impl JvmThread {
                 "doubleToRawLongBits" => {
                     let double = operands
                         .first()
-                        .context("no float to convert to raw int bits")?
+                        .context("no double to convert to long")?
                         .double()?;
                     Ok(Some(FrameValue::Long(double as i64)))
+                }
+                "longBitsToDouble" => {
+                    let long = operands
+                        .first()
+                        .context("no long to convert to double")?
+                        .long()?;
+                    Ok(Some(FrameValue::Double(long as f64)))
                 }
                 _ => bail!(
                     "native method {name} on {} not implemented",
