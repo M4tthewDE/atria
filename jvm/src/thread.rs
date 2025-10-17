@@ -65,14 +65,17 @@ impl JvmThread {
         name: String,
         descriptor: String,
     ) {
-        let thread_name = thread.name.clone();
-        let handle = std::thread::spawn(move || thread.run_method(&class, &name, &descriptor));
-        match handle.join() {
-            Ok(_) => debug!("thread {thread_name} has exited normally",),
-            Err(err) => error!("thread {thread_name} has crashed: {err:?}"),
-        }
+        std::thread::spawn(
+            move || match thread.run_method(&class, &name, &descriptor) {
+                Ok(_) => {
+                    debug!("thread '{}' has exited normally", thread.name)
+                }
+                Err(err) => error!("thread '{}' has crashed: {err:?}", thread.name),
+            },
+        );
     }
 
+    #[instrument(name = "", skip_all, fields(t = self.name))]
     pub fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
@@ -83,6 +86,7 @@ impl JvmThread {
         bail!("TODO: run_main")
     }
 
+    #[instrument(name = "", skip_all, fields(t = self.name))]
     fn run_method(
         &mut self,
         class_identifier: &ClassIdentifier,
@@ -92,22 +96,18 @@ impl JvmThread {
         let method = self.resolve_method(class_identifier, name, descriptor)?;
         let class = self.class(class_identifier)?;
         let descriptor = class.method_descriptor(&method)?;
-
-        let operands = self.stack.pop_operands(descriptor.parameters.len())?;
         let (code, max_locals) = method
             .code()
             .context(format!("method {name} has no code"))?;
         self.stack.push(
             name.to_string(),
             descriptor,
-            operands,
+            vec![],
             max_locals,
             code.to_vec(),
             class_identifier.clone(),
         );
-        self.execute()?;
-
-        bail!("TODO: run")
+        self.execute()
     }
 
     fn maybe_class(&self, identifier: &ClassIdentifier) -> Result<Option<Class>> {
