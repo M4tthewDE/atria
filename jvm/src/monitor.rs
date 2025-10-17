@@ -18,7 +18,11 @@ impl Monitor {
         self.entry_count += 1;
     }
 
-    pub fn is_owner(&mut self, thread_id: i64) -> bool {
+    pub fn decrement_entry_count(&mut self) {
+        self.entry_count -= 1;
+    }
+
+    pub fn is_owner(&self, thread_id: i64) -> bool {
         if let Some(owner_tid) = self.owner {
             owner_tid == thread_id
         } else {
@@ -33,5 +37,9 @@ impl Monitor {
 
         self.owner = Some(thread_id);
         Ok(())
+    }
+
+    pub fn exit(&mut self) {
+        self.owner = None;
     }
 }

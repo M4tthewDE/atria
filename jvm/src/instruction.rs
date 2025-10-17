@@ -127,6 +127,7 @@ pub enum Instruction {
     Imul,
     InvokeInterface(CpIndex, u8),
     MonitorEnter,
+    MonitorExit,
 }
 
 impl Instruction {
@@ -252,6 +253,7 @@ impl Instruction {
             0xc0 => Instruction::Checkcast(cp_index(bytes)?),
             0xc1 => Instruction::Instanceof(cp_index(bytes)?),
             0xc2 => Instruction::MonitorEnter,
+            0xc3 => Instruction::MonitorExit,
             0xc6 => Instruction::IfNull(offset(bytes)?),
             0xc7 => Instruction::IfNonNull(offset(bytes)?),
             op_code => bail!("unknown instruction: 0x{op_code:x}"),
@@ -366,6 +368,7 @@ impl Instruction {
             Self::Pop => 1,
             Self::Ixor => 1,
             Self::MonitorEnter => 1,
+            Self::MonitorExit => 1,
         }
     }
 }

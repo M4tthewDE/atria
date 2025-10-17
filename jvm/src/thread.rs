@@ -35,6 +35,7 @@ pub struct JvmThread {
     stack: Stack,
     creation_time: Instant,
     current_thread_object: Option<HeapId>,
+    current_thread_id: Option<i64>,
 }
 
 impl JvmThread {
@@ -52,6 +53,7 @@ impl JvmThread {
             stack: Stack::default(),
             creation_time: Instant::now(),
             current_thread_object: None,
+            current_thread_id: None,
         }
     }
 
@@ -100,6 +102,15 @@ impl JvmThread {
     fn current_class(&self) -> Result<Class> {
         let current_class = self.stack.current_class()?;
         self.class(&current_class)
+    }
+
+    fn exit_monitor(&self, heap_id: &HeapId) -> Result<()> {
+        let mut heap = self
+            .heap
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        heap.exit_monitor(heap_id)
     }
 
     fn enter_monitor(&self, heap_id: &HeapId, thread_id: i64) -> Result<()> {
@@ -521,6 +532,7 @@ impl JvmThread {
                 Instruction::Pop => self.pop()?,
                 Instruction::Ixor => self.ixor()?,
                 Instruction::MonitorEnter => self.monitor_enter()?,
+                Instruction::MonitorExit => self.monitor_exit()?,
             }
 
             // TODO: this is very brittle
@@ -553,6 +565,19 @@ impl JvmThread {
         }
 
         Ok(())
+    }
+
+    fn monitor_exit(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let heap_id = operand.reference()?.heap_id()?;
+        let monitor = self.monitor(heap_id)?;
+        let current_thread_id = self.current_thread_id.context("no current thread??")?;
+
+        if !monitor.is_owner(current_thread_id) {
+            bail!("TODO: IllegalMonitorStateException");
+        }
+
+        self.exit_monitor(heap_id)
     }
 
     fn monitor_enter(&mut self) -> Result<()> {
@@ -1717,6 +1742,7 @@ impl JvmThread {
         *counter += 1;
 
         self.heap_set_field(&object_id, "tid", FieldValue::Long(thread_id))?;
+        self.current_thread_id = Some(thread_id);
         Ok(object_id)
     }
 

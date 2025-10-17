@@ -238,6 +238,23 @@ impl Heap {
         }
     }
 
+    pub fn exit_monitor(&mut self, id: &HeapId) -> Result<()> {
+        let item = self
+            .items
+            .get_mut(id)
+            .context(format!("unknown object with {id:?}"))?;
+        if let HeapItem::Object(object) = item {
+            object.monitor.decrement_entry_count();
+            if object.monitor.entry_count() == 0 {
+                object.monitor.exit();
+            }
+
+            Ok(())
+        } else {
+            bail!("heap item with id {id:?} is not a object")
+        }
+    }
+
     pub fn enter_monitor(&mut self, id: &HeapId, thread_id: i64) -> Result<()> {
         let item = self
             .items
