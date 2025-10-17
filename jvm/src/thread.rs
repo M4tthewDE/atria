@@ -1923,6 +1923,32 @@ impl JvmThread {
                     class.identifier()
                 ),
             },
+            "java.lang.Float" => match name {
+                "floatToRawIntBits" => {
+                    let float = operands
+                        .first()
+                        .context("no float to convert to raw int bits")?
+                        .float()?;
+                    Ok(Some(FrameValue::Int(float as i32)))
+                }
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.Double" => match name {
+                "doubleToRawLongBits" => {
+                    let double = operands
+                        .first()
+                        .context("no float to convert to raw int bits")?
+                        .double()?;
+                    Ok(Some(FrameValue::Long(double as i64)))
+                }
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
             _ => bail!(
                 "native method {name} on {} not implemented",
                 class.identifier()
