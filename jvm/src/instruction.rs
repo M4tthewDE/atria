@@ -133,6 +133,7 @@ pub enum Instruction {
     MonitorEnter,
     MonitorExit,
     DupX1,
+    Aaload,
 }
 
 impl Instruction {
@@ -177,6 +178,7 @@ impl Instruction {
             0x2b => Instruction::Aload1,
             0x2c => Instruction::Aload2,
             0x2d => Instruction::Aload3,
+            0x32 => Instruction::Aaload,
             0x33 => Instruction::Baload,
             0x36 => Instruction::Istore(*bytes.get(1).context("premature end of code")?),
             0x37 => Instruction::Lstore(*bytes.get(1).context("premature end of code")?),
@@ -384,6 +386,7 @@ impl Instruction {
             Self::MonitorEnter => 1,
             Self::MonitorExit => 1,
             Self::DupX1 => 1,
+            Self::Aaload => 1,
         }
     }
 }

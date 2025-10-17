@@ -12,7 +12,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::{debug, error, instrument, trace};
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitor;
@@ -197,6 +197,14 @@ impl JvmThread {
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
         let (typ, arr) = heap.get_primitive_array(id)?;
         Ok((typ.clone(), arr.clone()))
+    }
+
+    pub fn get_reference_array(&self, id: &HeapId) -> Result<Vec<ReferenceValue>> {
+        let heap = self
+            .heap
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        heap.get_reference_array(id).cloned()
     }
 
     pub fn get_array_length(&self, id: &HeapId) -> Result<usize> {
@@ -555,6 +563,7 @@ impl JvmThread {
                 Instruction::Ishr => self.ishr()?,
                 Instruction::Lshr => self.lshr()?,
                 Instruction::Baload => self.baload()?,
+                Instruction::Aaload => self.aaload()?,
                 Instruction::I2c => self.i2c()?,
                 Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
                 Instruction::IfIcmpgt(offset) => self.if_icmpgt(offset)?,
@@ -751,6 +760,24 @@ impl JvmThread {
         };
 
         self.stack.push_operand(value)
+    }
+
+    fn aaload(&mut self) -> Result<()> {
+        let index = self.stack.pop_operand()?.int()?;
+        let arrayref_operand = self.stack.pop_operand()?;
+        let arrayref = arrayref_operand.reference()?;
+
+        if arrayref.is_null() {
+            bail!("TODO: throw NullPointerException")
+        }
+
+        let values = self.get_reference_array(arrayref.heap_id()?)?;
+        let reference = values
+            .get(index as usize)
+            .context("no array value at index {index}")?;
+
+        self.stack
+            .push_operand(FrameValue::Reference(reference.clone()))
     }
 
     fn array_length(&mut self) -> Result<()> {
@@ -1855,6 +1882,22 @@ impl JvmThread {
                 "getStackAccessControlContext" => {
                     Ok(Some(FrameValue::Reference(ReferenceValue::Null)))
                 }
+                _ => bail!("native method not implemented"),
+            }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.ref.Reference")? {
+            match name {
+                // TODO: this will be used at some point
+                "waitForReferencePendingList" => {
+                    warn!("parking this thread, reference pending list not implemented yet");
+                    std::thread::park();
+                    Ok(None)
+                }
+                _ => bail!("native method not implemented"),
+            }
+        } else if class.identifier() == &ClassIdentifier::new("java.lang.ClassLoader")? {
+            match name {
+                // TODO: this will be used at some point
+                "registerNatives" => Ok(None),
                 _ => bail!("native method not implemented"),
             }
         } else {

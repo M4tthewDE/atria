@@ -310,6 +310,18 @@ impl Heap {
         Ok(())
     }
 
+    pub fn get_reference_array(&self, id: &HeapId) -> Result<&Vec<ReferenceValue>> {
+        let item = self
+            .items
+            .get(id)
+            .context(format!("unknown object with {id:?}"))?;
+
+        match item {
+            HeapItem::ReferenceArray { values, .. } => Ok(values),
+            _ => bail!("object at {id:?} is not a array, is {item:?}"),
+        }
+    }
+
     pub fn get_primitive_array(
         &self,
         id: &HeapId,
