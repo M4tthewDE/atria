@@ -1661,8 +1661,8 @@ impl JvmThread {
             operands
         );
 
-        if class.identifier() == &ClassIdentifier::new("java.lang.Class")? {
-            match name {
+        match format!("{:?}", class.identifier()).as_str() {
+            "java.lang.Class" => match name {
                 "registerNatives" => Ok(None),
                 "initClassName" => {
                     if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
@@ -1740,26 +1740,32 @@ impl JvmThread {
                         ClassIdentifier::new(&name)?,
                     ))))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.Runtime")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.Runtime" => match name {
                 "availableProcessors" => {
                     let cpus = std::thread::available_parallelism()?;
                     Ok(Some(FrameValue::Int(cpus.get().try_into()?)))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.Unsafe")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "jdk.internal.misc.Unsafe" => match name {
                 "registerNatives" => Ok(None),
                 "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
                 "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
                 "objectFieldOffset1" => Ok(Some(FrameValue::Long(0))),
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.Thread")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.Thread" => match name {
                 "registerNatives" => Ok(None),
                 "currentThread" => Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
                     self.current_thread_object
@@ -1807,10 +1813,12 @@ impl JvmThread {
 
                     Ok(None)
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.System")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.System" => match name {
                 "registerNatives" => Ok(None),
                 "nanoTime" => {
                     let now = Instant::now();
@@ -1827,30 +1835,36 @@ impl JvmThread {
                     let value = hasher.finish();
                     Ok(Some(FrameValue::Int(value as i32)))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.misc.CDS")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "jdk.internal.misc.CDS" => match name {
                 "isDumpingClassList0" => Ok(Some(FrameValue::Int(0))),
                 "isDumpingArchive0" => Ok(Some(FrameValue::Int(0))),
                 "isSharingEnabled0" => Ok(Some(FrameValue::Int(0))),
                 // TODO: provide a proper seed
                 "getRandomSeedForDumping" => Ok(Some(FrameValue::Long(0))),
                 "initializeFromArchive" => Ok(None),
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("jdk.internal.reflect.Reflection")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "jdk.internal.reflect.Reflection" => match name {
                 "getCallerClass" => {
                     let caller_class = self.stack.caller_class()?;
                     Ok(Some(FrameValue::Reference(ReferenceValue::Class(
                         caller_class.clone(),
                     ))))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.Object")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.Object" => match name {
                 "getClass" => {
                     let heap_id = operands
                         .first()
@@ -1874,34 +1888,45 @@ impl JvmThread {
                     let value = hasher.finish();
                     Ok(Some(FrameValue::Int(value as i32)))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.security.AccessController")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.security.AccessController" => match name {
                 // TODO: this will be used at some point
                 "getStackAccessControlContext" => {
                     Ok(Some(FrameValue::Reference(ReferenceValue::Null)))
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.ref.Reference")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.Reference" => match name {
                 // TODO: this will be used at some point
                 "waitForReferencePendingList" => {
                     warn!("parking this thread, reference pending list not implemented yet");
                     std::thread::park();
                     Ok(None)
                 }
-                _ => bail!("native method not implemented"),
-            }
-        } else if class.identifier() == &ClassIdentifier::new("java.lang.ClassLoader")? {
-            match name {
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "java.lang.ClassLoader" => match name {
                 // TODO: this will be used at some point
                 "registerNatives" => Ok(None),
-                _ => bail!("native method not implemented"),
-            }
-        } else {
-            bail!("native method not implemented")
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            _ => bail!(
+                "native method {name} on {} not implemented",
+                class.identifier()
+            ),
         }
     }
 
