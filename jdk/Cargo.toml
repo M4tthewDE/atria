@@ -1,0 +1,12 @@
+[package]
+name = "jdk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rkyv = "0.8.12"
+anyhow = "1.0.100"
+
+[build-dependencies]
+zip = "5.1.1"
+rkyv = "0.8.12"

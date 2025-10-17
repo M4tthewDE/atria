@@ -415,6 +415,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
+name = "jdk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rkyv",
+ "zip",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -439,8 +448,8 @@ name = "jvm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "jdk",
  "parser",
- "rkyv",
  "tracing",
  "tracing-subscriber",
  "zip",

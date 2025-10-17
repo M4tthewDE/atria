@@ -6,13 +6,10 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 parser = { version = "0.1.0", path = "../parser" }
-rkyv = "0.8.12"
+jdk = { version = "0.1.0", path = "../jdk" }
 tracing = "0.1.41"
 zip = "5.1.1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 
-[build-dependencies]
-zip = "5.1.1"
-rkyv = "0.8.12"
