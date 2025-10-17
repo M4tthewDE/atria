@@ -119,6 +119,17 @@ impl JvmThread {
         heap.enter_monitor(heap_id, thread_id)
     }
 
+    fn enter_class_monitor(&self, identifier: &ClassIdentifier, thread_id: i64) -> Result<()> {
+        let mut classes = self
+            .classes
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        let class = classes
+            .get_mut(identifier)
+            .context(format!("class {identifier:?} is not initialized"))?;
+        class.enter_monitor(thread_id)
+    }
+
     fn monitor(&self, heap_id: &HeapId) -> Result<Monitor> {
         let heap = self
             .heap
@@ -423,6 +434,7 @@ impl JvmThread {
                 Instruction::IfNull(offset) => self.if_null(offset)?,
                 Instruction::New(ref index) => self.new_instruction(index)?,
                 Instruction::Dup => self.dup()?,
+                Instruction::Dup2 => self.dup2()?,
                 Instruction::InvokeSpecial(ref index) => self.invoke_special(index)?,
                 Instruction::Areturn => {
                     let object_ref = self.stack.pop_operand()?;
@@ -495,6 +507,7 @@ impl JvmThread {
                 Instruction::Iushr => self.iushr()?,
                 Instruction::Ifge(offset) => self.if_ge(offset)?,
                 Instruction::Iadd => self.iadd()?,
+                Instruction::Ladd => self.ladd()?,
                 Instruction::Lconst(value) => self.stack.push_operand(FrameValue::Long(value))?,
                 Instruction::IfIcmpeq(offset) => self.if_icmpeq(offset)?,
                 Instruction::ArrayLength => self.array_length()?,
@@ -574,9 +587,8 @@ impl JvmThread {
         let operand = self.stack.pop_operand()?;
         let heap_id = operand.reference()?.heap_id()?;
         let monitor = self.monitor(heap_id)?;
-        let current_thread_id = self.current_thread_id.context("no current thread??")?;
 
-        if !monitor.is_owner(current_thread_id) {
+        if !monitor.is_owner(self.current_thread_id()?) {
             bail!("TODO: IllegalMonitorStateException");
         }
 
@@ -804,6 +816,12 @@ impl JvmThread {
         let value2 = self.stack.pop_operand()?.int()?;
         let value1 = self.stack.pop_operand()?.int()?;
         self.stack.push_operand(FrameValue::Int(value1 + value2))
+    }
+
+    fn ladd(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.long()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+        self.stack.push_operand(FrameValue::Long(value1 + value2))
     }
 
     fn dadd(&mut self) -> Result<()> {
@@ -1276,7 +1294,12 @@ impl JvmThread {
         }
 
         if method.is_synchronized() {
-            bail!("TODO: invokestatic synchronized method");
+            let monitor = class.monitor();
+            if monitor.entry_count() == 0 {
+                self.enter_class_monitor(class.identifier(), self.current_thread_id()?)?;
+            } else {
+                bail!("TODO: enter synchronized static method");
+            }
         }
 
         let descriptor = class.method_descriptor(&method)?;
@@ -1434,6 +1457,23 @@ impl JvmThread {
         let operand = self.stack.pop_operand()?;
         self.stack.push_operand(operand.clone())?;
         self.stack.push_operand(operand)
+    }
+
+    fn dup2(&mut self) -> Result<()> {
+        let value1 = self.stack.pop_operand()?;
+        if value1.is_category1() {
+            let value2 = self.stack.pop_operand()?;
+            if !value2.is_category1() {
+                bail!("bot values have to be category 1");
+            }
+            self.stack.push_operand(value2.clone())?;
+            self.stack.push_operand(value1.clone())?;
+            self.stack.push_operand(value2)?;
+            self.stack.push_operand(value1)
+        } else {
+            self.stack.push_operand(value1.clone())?;
+            self.stack.push_operand(value1)
+        }
     }
 
     fn dup_x1(&mut self) -> Result<()> {

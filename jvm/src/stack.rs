@@ -298,4 +298,8 @@ impl FrameValue {
             bail!("frame value is not a double")
         }
     }
+
+    pub fn is_category1(&self) -> bool {
+        self.double().is_err() && self.long().is_err()
+    }
 }
