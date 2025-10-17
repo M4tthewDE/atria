@@ -38,6 +38,10 @@ impl Object {
     pub fn entry_count(&self) -> u64 {
         self.monitor.entry_count()
     }
+
+    pub fn monitor(&self) -> &Monitor {
+        &self.monitor
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -231,6 +235,19 @@ impl Heap {
                 .context("no field with name '{name}' found")
                 .cloned(),
             _ => bail!("item at {id:?} is no object, but {item:?}"),
+        }
+    }
+
+    pub fn enter_monitor(&mut self, id: &HeapId, thread_id: i64) -> Result<()> {
+        let item = self
+            .items
+            .get_mut(id)
+            .context(format!("unknown object with {id:?}"))?;
+        if let HeapItem::Object(object) = item {
+            object.monitor.set_entry_count(1);
+            object.monitor.set_owner(thread_id)
+        } else {
+            bail!("heap item with id {id:?} is not a object")
         }
     }
 

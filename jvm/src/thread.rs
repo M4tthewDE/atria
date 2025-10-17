@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -15,6 +15,7 @@ use parser::class::{
 use tracing::{debug, instrument, trace};
 
 use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
+use crate::monitor::Monitor;
 use crate::{ClassIdentifier, ReferenceValue};
 use crate::{
     class::{Class, FieldValue},
@@ -22,6 +23,8 @@ use crate::{
     loader::BootstrapClassLoader,
     stack::{FrameValue, Stack},
 };
+
+static THREAD_ID_COUNTER: LazyLock<Mutex<i64>> = LazyLock::new(|| Mutex::new(0));
 
 pub struct JvmThread {
     name: String,
@@ -97,6 +100,22 @@ impl JvmThread {
     fn current_class(&self) -> Result<Class> {
         let current_class = self.stack.current_class()?;
         self.class(&current_class)
+    }
+
+    fn enter_monitor(&self, heap_id: &HeapId, thread_id: i64) -> Result<()> {
+        let mut heap = self
+            .heap
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        heap.enter_monitor(heap_id, thread_id)
+    }
+
+    fn monitor(&self, heap_id: &HeapId) -> Result<Monitor> {
+        let heap = self
+            .heap
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        Ok(heap.get(heap_id)?.object()?.monitor().clone())
     }
 
     fn heap_get(&self, heap_id: &HeapId) -> Result<HeapItem> {
@@ -186,7 +205,7 @@ impl JvmThread {
         Ok(heap.allocate_array(class, length))
     }
 
-    pub fn heap_get_field(&mut self, id: &HeapId, name: &str) -> Result<FieldValue> {
+    pub fn heap_get_field(&self, id: &HeapId, name: &str) -> Result<FieldValue> {
         let heap = self
             .heap
             .lock()
@@ -538,14 +557,27 @@ impl JvmThread {
 
     fn monitor_enter(&mut self) -> Result<()> {
         let operand = self.stack.pop_operand()?;
-        dbg!(&operand);
-        let heap_item = self.heap_get(operand.reference()?.heap_id()?)?;
-        let object = heap_item.object()?;
+        let heap_id = operand.reference()?.heap_id()?;
+        let monitor = self.monitor(heap_id)?;
 
-        if object.entry_count() == 0 {
-            bail!("TODO: enter ")
+        if monitor.entry_count() == 0 {
+            self.enter_monitor(heap_id, self.current_thread_id()?)
+        } else {
+            bail!("TODO: monitorenter")
         }
-        bail!("TODO: monitorenter")
+    }
+
+    fn current_thread_id(&self) -> Result<i64> {
+        let current_thread_heap_id = self
+            .current_thread_object
+            .clone()
+            .context("no current thread??")?;
+        let tid = self.heap_get_field(&current_thread_heap_id, "tid")?;
+        if let FieldValue::Long(thread_id) = tid {
+            Ok(thread_id)
+        } else {
+            bail!("tid is not a long, is: {tid:?}")
+        }
     }
 
     fn ixor(&mut self) -> Result<()> {
@@ -1677,6 +1709,14 @@ impl JvmThread {
             "group",
             FieldValue::Reference(ReferenceValue::HeapItem(thread_group)),
         )?;
+
+        let mut counter = THREAD_ID_COUNTER
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        let thread_id = *counter;
+        *counter += 1;
+
+        self.heap_set_field(&object_id, "tid", FieldValue::Long(thread_id))?;
         Ok(object_id)
     }
 
