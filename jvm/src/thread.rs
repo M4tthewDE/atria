@@ -505,6 +505,8 @@ impl JvmThread {
                 Instruction::Baload => self.baload()?,
                 Instruction::I2c => self.i2c()?,
                 Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
+                Instruction::IfIcmpgt(offset) => self.if_icmpgt(offset)?,
+                Instruction::IfIcmple(offset) => self.if_icmple(offset)?,
                 Instruction::IfAcmpne(offset) => self.if_acmpne(offset)?,
                 Instruction::Instanceof(ref index) => self.instance_of(index)?,
                 Instruction::Checkcast(ref index) => self.check_cast(index)?,
@@ -533,6 +535,7 @@ impl JvmThread {
                 Instruction::Ixor => self.ixor()?,
                 Instruction::MonitorEnter => self.monitor_enter()?,
                 Instruction::MonitorExit => self.monitor_exit()?,
+                Instruction::DupX1 => self.dup_x1()?,
             }
 
             // TODO: this is very brittle
@@ -545,6 +548,8 @@ impl JvmThread {
                 | Instruction::Iflt(_)
                 | Instruction::Ifgt(_)
                 | Instruction::IfIcmpge(_)
+                | Instruction::IfIcmpgt(_)
+                | Instruction::IfIcmple(_)
                 | Instruction::IfIcmplt(_)
                 | Instruction::Ifge(_)
                 | Instruction::IfIcmpeq(_)
@@ -1018,6 +1023,28 @@ impl JvmThread {
         }
     }
 
+    fn if_icmpgt(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 > value2 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
+    fn if_icmple(&mut self, offset: i16) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        if value1 <= value2 {
+            self.stack.offset_pc(offset)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
     fn if_icmpne(&mut self, offset: i16) -> Result<()> {
         let value2 = self.stack.pop_operand()?.int()?;
         let value1 = self.stack.pop_operand()?.int()?;
@@ -1411,6 +1438,14 @@ impl JvmThread {
         self.stack.push_operand(operand)
     }
 
+    fn dup_x1(&mut self) -> Result<()> {
+        let value1 = self.stack.pop_operand()?;
+        let value2 = self.stack.pop_operand()?;
+        self.stack.push_operand(value1.clone())?;
+        self.stack.push_operand(value2)?;
+        self.stack.push_operand(value1)
+    }
+
     fn invoke_special(&mut self, index: &CpIndex) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
         let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
@@ -1625,6 +1660,13 @@ impl JvmThread {
                         .clone()
                         .context("no current thread found")?,
                 )))),
+                "setPriority0" => {
+                    let objectref = operands.first().context("no first operand")?;
+                    let priority = operands.get(1).context("no second operand")?;
+                    let heap_id = objectref.reference()?.heap_id()?;
+                    self.heap_set_field(heap_id, "priority", priority.clone().into())?;
+                    Ok(None)
+                }
                 _ => bail!("native method not implemented"),
             }
         } else if class.identifier() == &ClassIdentifier::new("java.lang.System")? {
@@ -1694,6 +1736,14 @@ impl JvmThread {
                 }
                 _ => bail!("native method not implemented"),
             }
+        } else if class.identifier() == &ClassIdentifier::new("java.security.AccessController")? {
+            match name {
+                // TODO: this will be used at some point
+                "getStackAccessControlContext" => {
+                    Ok(Some(FrameValue::Reference(ReferenceValue::Null)))
+                }
+                _ => bail!("native method not implemented"),
+            }
         } else {
             bail!("native method not implemented")
         }
@@ -1734,6 +1784,7 @@ impl JvmThread {
             "group",
             FieldValue::Reference(ReferenceValue::HeapItem(thread_group)),
         )?;
+        self.heap_set_field(&object_id, "priority", FieldValue::Integer(1))?;
 
         let mut counter = THREAD_ID_COUNTER
             .lock()

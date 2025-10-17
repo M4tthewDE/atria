@@ -104,6 +104,8 @@ pub enum Instruction {
     Baload,
     I2c,
     IfIcmpne(i16),
+    IfIcmpgt(i16),
+    IfIcmple(i16),
     IfAcmpne(i16),
     Instanceof(CpIndex),
     Checkcast(CpIndex),
@@ -128,6 +130,7 @@ pub enum Instruction {
     InvokeInterface(CpIndex, u8),
     MonitorEnter,
     MonitorExit,
+    DupX1,
 }
 
 impl Instruction {
@@ -194,6 +197,7 @@ impl Instruction {
             0x55 => Instruction::Castore,
             0x57 => Instruction::Pop,
             0x59 => Instruction::Dup,
+            0x5a => Instruction::DupX1,
             0x60 => Instruction::Iadd,
             0x63 => Instruction::Dadd,
             0x64 => Instruction::Isub,
@@ -228,6 +232,8 @@ impl Instruction {
             0xa0 => Instruction::IfIcmpne(offset(bytes)?),
             0xa1 => Instruction::IfIcmplt(offset(bytes)?),
             0xa2 => Instruction::IfIcmpge(offset(bytes)?),
+            0xa3 => Instruction::IfIcmpgt(offset(bytes)?),
+            0xa4 => Instruction::IfIcmple(offset(bytes)?),
             0xa6 => Instruction::IfAcmpne(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
             0xac => Instruction::Ireturn,
@@ -340,6 +346,8 @@ impl Instruction {
             Self::Baload => 1,
             Self::I2c => 1,
             Self::IfIcmpne(_) => 3,
+            Self::IfIcmpgt(_) => 3,
+            Self::IfIcmple(_) => 3,
             Self::IfAcmpne(_) => 3,
             Self::Instanceof(_) => 3,
             Self::Checkcast(_) => 3,
@@ -369,6 +377,7 @@ impl Instruction {
             Self::Ixor => 1,
             Self::MonitorEnter => 1,
             Self::MonitorExit => 1,
+            Self::DupX1 => 1,
         }
     }
 }
