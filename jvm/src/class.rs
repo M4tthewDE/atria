@@ -160,6 +160,13 @@ impl FieldValue {
             _ => bail!("no heap id found"),
         }
     }
+
+    pub fn long(&self) -> Result<i64> {
+        match self {
+            Self::Long(val) => Ok(*val),
+            _ => bail!("no long found"),
+        }
+    }
 }
 
 impl From<FieldDescriptor> for FieldValue {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
@@ -23,8 +23,6 @@ use crate::{
     loader::BootstrapClassLoader,
     stack::{FrameValue, Stack},
 };
-
-static THREAD_ID_COUNTER: LazyLock<Mutex<i64>> = LazyLock::new(|| Mutex::new(0));
 
 pub struct JvmThread {
     name: String,
@@ -1786,13 +1784,18 @@ impl JvmThread {
         )?;
         self.heap_set_field(&object_id, "priority", FieldValue::Integer(1))?;
 
-        let mut counter = THREAD_ID_COUNTER
+        let thread_id = class.get_static_field_value("threadSeqNumber")?.long()?;
+        self.heap_set_field(&object_id, "tid", FieldValue::Long(thread_id))?;
+
+        let mut classes = self
+            .classes
             .lock()
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        let thread_id = *counter;
-        *counter += 1;
+        classes
+            .get_mut(&thread_identifier)
+            .context(format!("class {thread_identifier:?} is not initialized"))?
+            .set_static_field("threadSeqNumber", FieldValue::Long(thread_id + 1))?;
 
-        self.heap_set_field(&object_id, "tid", FieldValue::Long(thread_id))?;
         self.current_thread_id = Some(thread_id);
         Ok(object_id)
     }
