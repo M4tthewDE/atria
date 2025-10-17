@@ -5,7 +5,7 @@ use anyhow::{Context, Result, bail};
 use parser::class::{ClassFile, access_flags::AccessFlag};
 use tracing::trace;
 
-pub trait ReadClass {
+pub trait ReadClass: Send {
     fn read_class(&mut self, identifier: &ClassIdentifier) -> Result<Vec<u8>>;
 }
 

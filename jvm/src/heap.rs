@@ -91,7 +91,8 @@ impl PrimitiveArrayType {
         })
     }
 
-    fn default(&self) -> PrimitiveArrayValue {
+    // TODO: this should be the trait
+    pub fn default(&self) -> PrimitiveArrayValue {
         match self {
             Self::Boolean => PrimitiveArrayValue::Boolean(false),
             Self::Char => PrimitiveArrayValue::Char(0),
@@ -203,7 +204,7 @@ impl Heap {
         }
     }
 
-    pub fn get_field(&mut self, id: &HeapId, name: &str) -> Result<FieldValue> {
+    pub fn get_field(&self, id: &HeapId, name: &str) -> Result<FieldValue> {
         let item = self
             .items
             .get(id)
