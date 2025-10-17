@@ -12,7 +12,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::{debug, instrument, trace};
+use tracing::{debug, error, instrument, trace};
 
 use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitor;
@@ -59,6 +59,20 @@ impl JvmThread {
         std::thread::spawn(move || thread.run_main(&main_class))
     }
 
+    pub fn run_with_method(
+        mut thread: Self,
+        class: ClassIdentifier,
+        name: String,
+        descriptor: String,
+    ) {
+        let thread_name = thread.name.clone();
+        let handle = std::thread::spawn(move || thread.run_method(&class, &name, &descriptor));
+        match handle.join() {
+            Ok(_) => debug!("thread {thread_name} has exited normally",),
+            Err(err) => error!("thread {thread_name} has crashed: {err:?}"),
+        }
+    }
+
     pub fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
@@ -66,6 +80,33 @@ impl JvmThread {
             self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
         self.initialize(main_class)?;
+        bail!("TODO: run_main")
+    }
+
+    fn run_method(
+        &mut self,
+        class_identifier: &ClassIdentifier,
+        name: &str,
+        descriptor: &str,
+    ) -> Result<()> {
+        let method = self.resolve_method(class_identifier, name, descriptor)?;
+        let class = self.class(class_identifier)?;
+        let descriptor = class.method_descriptor(&method)?;
+
+        let operands = self.stack.pop_operands(descriptor.parameters.len())?;
+        let (code, max_locals) = method
+            .code()
+            .context(format!("method {name} has no code"))?;
+        self.stack.push(
+            name.to_string(),
+            descriptor,
+            operands,
+            max_locals,
+            code.to_vec(),
+            class_identifier.clone(),
+        );
+        self.execute()?;
+
         bail!("TODO: run")
     }
 
@@ -1703,6 +1744,40 @@ impl JvmThread {
                     let priority = operands.get(1).context("no second operand")?;
                     let heap_id = objectref.reference()?.heap_id()?;
                     self.heap_set_field(heap_id, "priority", priority.clone().into())?;
+                    Ok(None)
+                }
+                "start0" => {
+                    let objectref = operands
+                        .first()
+                        .context("no first operand, no thread to start")?;
+                    let heap_id = objectref.reference()?.heap_id()?;
+                    let heap_item = self.heap_get(heap_id)?;
+                    let object = heap_item.object()?;
+                    let class_identifier = object.class();
+
+                    let name = self.heap_get_field(heap_id, "name")?;
+                    let byte_value = self.heap_get_field(name.heap_id()?, "value")?;
+                    let (_, primitive_array) = self.get_primitive_array(byte_value.heap_id()?)?;
+                    let bytes: Vec<u8> = primitive_array
+                        .iter()
+                        .map(|p| p.byte())
+                        .collect::<Result<Vec<u8>>>()?;
+                    let name = String::from_utf8(bytes)?;
+
+                    let new_thread = Self::new(
+                        name.to_string(),
+                        self.class_loader.clone(),
+                        self.classes.clone(),
+                        self.heap.clone(),
+                    );
+
+                    Self::run_with_method(
+                        new_thread,
+                        class_identifier.clone(),
+                        "run".to_string(),
+                        "()V".to_string(),
+                    );
+
                     Ok(None)
                 }
                 _ => bail!("native method not implemented"),
