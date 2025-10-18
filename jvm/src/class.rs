@@ -11,7 +11,7 @@ use parser::class::{
 };
 use tracing::trace;
 
-use crate::{ClassIdentifier, ReferenceValue, heap::HeapId, monitor::Monitor};
+use crate::{ClassIdentifier, ReferenceValue, heap::HeapId};
 
 #[derive(Clone)]
 pub struct Class {
@@ -20,7 +20,6 @@ pub struct Class {
     class_file: ClassFile,
     initialized: bool,
     being_initialized: bool,
-    monitor: Monitor,
 }
 
 impl Class {
@@ -31,7 +30,6 @@ impl Class {
             fields: HashMap::default(),
             initialized: false,
             being_initialized: false,
-            monitor: Monitor::default(),
         }
     }
 
@@ -143,15 +141,6 @@ impl Class {
         self.class_file
             .access_flags
             .contains(&AccessFlag::Interface)
-    }
-
-    pub fn monitor(&self) -> &Monitor {
-        &self.monitor
-    }
-
-    pub fn enter_monitor(&mut self, thread_id: i64) -> Result<()> {
-        self.monitor.set_entry_count(1);
-        self.monitor.set_owner(thread_id)
     }
 }
 

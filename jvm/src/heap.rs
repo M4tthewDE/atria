@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 use tracing::debug;
 
-use crate::{ClassIdentifier, ReferenceValue, class::FieldValue, monitor::Monitor};
+use crate::{ClassIdentifier, ReferenceValue, class::FieldValue};
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone)]
 pub struct HeapId(u64);
@@ -19,7 +19,6 @@ impl From<u64> for HeapId {
 pub struct Object {
     class_identifier: ClassIdentifier,
     fields: HashMap<String, FieldValue>,
-    monitor: Monitor,
 }
 
 impl Object {
@@ -27,20 +26,11 @@ impl Object {
         Self {
             class_identifier,
             fields,
-            monitor: Monitor::default(),
         }
     }
 
     pub fn class(&self) -> &ClassIdentifier {
         &self.class_identifier
-    }
-
-    pub fn entry_count(&self) -> u64 {
-        self.monitor.entry_count()
-    }
-
-    pub fn monitor(&self) -> &Monitor {
-        &self.monitor
     }
 }
 
@@ -235,36 +225,6 @@ impl Heap {
                 .context("no field with name '{name}' found")
                 .cloned(),
             _ => bail!("item at {id:?} is no object, but {item:?}"),
-        }
-    }
-
-    pub fn exit_monitor(&mut self, id: &HeapId) -> Result<()> {
-        let item = self
-            .items
-            .get_mut(id)
-            .context(format!("unknown object with {id:?}"))?;
-        if let HeapItem::Object(object) = item {
-            object.monitor.decrement_entry_count();
-            if object.monitor.entry_count() == 0 {
-                object.monitor.exit();
-            }
-
-            Ok(())
-        } else {
-            bail!("heap item with id {id:?} is not a object")
-        }
-    }
-
-    pub fn enter_monitor(&mut self, id: &HeapId, thread_id: i64) -> Result<()> {
-        let item = self
-            .items
-            .get_mut(id)
-            .context(format!("unknown object with {id:?}"))?;
-        if let HeapItem::Object(object) = item {
-            object.monitor.set_entry_count(1);
-            object.monitor.set_owner(thread_id)
-        } else {
-            bail!("heap item with id {id:?} is not a object")
         }
     }
 

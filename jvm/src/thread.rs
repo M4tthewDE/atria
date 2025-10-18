@@ -15,7 +15,7 @@ use parser::class::{
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
-use crate::monitor::Monitor;
+use crate::monitor::Monitors;
 use crate::{ClassIdentifier, ReferenceValue};
 use crate::{
     class::{Class, FieldValue},
@@ -24,16 +24,26 @@ use crate::{
     stack::{FrameValue, Stack},
 };
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ThreadId(i64);
+
+impl From<i64> for ThreadId {
+    fn from(value: i64) -> Self {
+        Self(value)
+    }
+}
+
 pub struct JvmThread {
     name: String,
     class_loader: Arc<Mutex<BootstrapClassLoader>>,
     classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
     heap: Arc<Mutex<Heap>>,
+    monitors: Arc<Mutex<Monitors>>,
 
     stack: Stack,
     creation_time: Instant,
     current_thread_object: Option<HeapId>,
-    current_thread_id: Option<i64>,
+    current_thread_id: Option<ThreadId>,
 }
 
 impl JvmThread {
@@ -42,12 +52,14 @@ impl JvmThread {
         class_loader: Arc<Mutex<BootstrapClassLoader>>,
         classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
         heap: Arc<Mutex<Heap>>,
+        monitors: Arc<Mutex<Monitors>>,
     ) -> Self {
         Self {
             name,
             class_loader,
             classes,
             heap,
+            monitors,
             stack: Stack::default(),
             creation_time: Instant::now(),
             current_thread_object: None,
@@ -141,42 +153,6 @@ impl JvmThread {
     fn current_class(&self) -> Result<Class> {
         let current_class = self.stack.current_class()?;
         self.class(&current_class)
-    }
-
-    fn exit_monitor(&self, heap_id: &HeapId) -> Result<()> {
-        let mut heap = self
-            .heap
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-
-        heap.exit_monitor(heap_id)
-    }
-
-    fn enter_monitor(&self, heap_id: &HeapId, thread_id: i64) -> Result<()> {
-        let mut heap = self
-            .heap
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        heap.enter_monitor(heap_id, thread_id)
-    }
-
-    fn enter_class_monitor(&self, identifier: &ClassIdentifier, thread_id: i64) -> Result<()> {
-        let mut classes = self
-            .classes
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        let class = classes
-            .get_mut(identifier)
-            .context(format!("class {identifier:?} is not initialized"))?;
-        class.enter_monitor(thread_id)
-    }
-
-    fn monitor(&self, heap_id: &HeapId) -> Result<Monitor> {
-        let heap = self
-            .heap
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        Ok(heap.get(heap_id)?.object()?.monitor().clone())
     }
 
     fn heap_get(&self, heap_id: &HeapId) -> Result<HeapItem> {
@@ -313,6 +289,22 @@ impl JvmThread {
             .lock()
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
         loader.load(identifier)
+    }
+
+    fn enter_object_monitor(&mut self, heap_id: &HeapId, thread_id: &ThreadId) -> Result<bool> {
+        let mut monitors = self
+            .monitors
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        Ok(monitors.enter_object_monitor(heap_id, thread_id))
+    }
+
+    fn exit_object_monitor(&mut self, heap_id: &HeapId, thread_id: &ThreadId) -> Result<()> {
+        let mut monitors = self
+            .monitors
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        monitors.exit_object_monitor(heap_id, thread_id)
     }
 
     fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
@@ -601,9 +593,9 @@ impl JvmThread {
                 }
                 Instruction::Pop => self.pop()?,
                 Instruction::Ixor => self.ixor()?,
+                Instruction::DupX1 => self.dup_x1()?,
                 Instruction::MonitorEnter => self.monitor_enter()?,
                 Instruction::MonitorExit => self.monitor_exit()?,
-                Instruction::DupX1 => self.dup_x1()?,
             }
 
             // TODO: this is very brittle
@@ -631,6 +623,32 @@ impl JvmThread {
         Ok(())
     }
 
+    fn monitor_exit(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let objectref = operand.reference()?;
+        let heap_id = objectref.heap_id()?;
+        let thread_id = self
+            .current_thread_id
+            .clone()
+            .context("how do we not have a thread id?")?;
+        self.exit_object_monitor(heap_id, &thread_id)
+    }
+
+    fn monitor_enter(&mut self) -> Result<()> {
+        let operand = self.stack.pop_operand()?;
+        let objectref = operand.reference()?;
+        let heap_id = objectref.heap_id()?;
+        let thread_id = self
+            .current_thread_id
+            .clone()
+            .context("how do we not have a thread id?")?;
+        if !self.enter_object_monitor(heap_id, &thread_id)? {
+            bail!("TODO: wait for monitor to be available")
+        }
+
+        Ok(())
+    }
+
     fn pop(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?;
         if matches!(value, FrameValue::Long(_)) || matches!(value, FrameValue::Double(_)) {
@@ -638,43 +656,6 @@ impl JvmThread {
         }
 
         Ok(())
-    }
-
-    fn monitor_exit(&mut self) -> Result<()> {
-        let operand = self.stack.pop_operand()?;
-        let heap_id = operand.reference()?.heap_id()?;
-        let monitor = self.monitor(heap_id)?;
-
-        if !monitor.is_owner(self.current_thread_id()?) {
-            bail!("TODO: IllegalMonitorStateException");
-        }
-
-        self.exit_monitor(heap_id)
-    }
-
-    fn monitor_enter(&mut self) -> Result<()> {
-        let operand = self.stack.pop_operand()?;
-        let heap_id = operand.reference()?.heap_id()?;
-        let monitor = self.monitor(heap_id)?;
-
-        if monitor.entry_count() == 0 {
-            self.enter_monitor(heap_id, self.current_thread_id()?)
-        } else {
-            bail!("TODO: monitorenter")
-        }
-    }
-
-    fn current_thread_id(&self) -> Result<i64> {
-        let current_thread_heap_id = self
-            .current_thread_object
-            .clone()
-            .context("no current thread??")?;
-        let tid = self.heap_get_field(&current_thread_heap_id, "tid")?;
-        if let FieldValue::Long(thread_id) = tid {
-            Ok(thread_id)
-        } else {
-            bail!("tid is not a long, is: {tid:?}")
-        }
     }
 
     fn ixor(&mut self) -> Result<()> {
@@ -1377,12 +1358,7 @@ impl JvmThread {
         }
 
         if method.is_synchronized() {
-            let monitor = class.monitor();
-            if monitor.entry_count() == 0 {
-                self.enter_class_monitor(class.identifier(), self.current_thread_id()?)?;
-            } else {
-                bail!("TODO: enter synchronized static method");
-            }
+            bail!("TODO: enter synchronized static method");
         }
 
         let descriptor = class.method_descriptor(&method)?;
@@ -1817,6 +1793,7 @@ impl JvmThread {
                         self.class_loader.clone(),
                         self.classes.clone(),
                         self.heap.clone(),
+                        self.monitors.clone(),
                     );
 
                     Self::run_with_method(
@@ -2027,7 +2004,7 @@ impl JvmThread {
             .context(format!("class {thread_identifier:?} is not initialized"))?
             .set_static_field("threadSeqNumber", FieldValue::Long(thread_id + 1))?;
 
-        self.current_thread_id = Some(thread_id);
+        self.current_thread_id = Some(thread_id.into());
         Ok(object_id)
     }
 

@@ -8,6 +8,7 @@ use parser::class::descriptor::{BaseType, FieldDescriptor, FieldType};
 use zip::ZipArchive;
 
 use crate::heap::{Heap, HeapId};
+use crate::monitor::Monitors;
 use crate::thread::JvmThread;
 use crate::{
     class::{Class, FieldValue},
@@ -32,6 +33,7 @@ pub struct Jvm {
     classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
     main_class: ClassIdentifier,
     heap: Arc<Mutex<Heap>>,
+    monitors: Arc<Mutex<Monitors>>,
 }
 
 impl Jvm {
@@ -47,6 +49,7 @@ impl Jvm {
             classes: Arc::new(Mutex::new(HashMap::new())),
             main_class,
             heap: Arc::new(Mutex::new(Heap::default())),
+            monitors: Arc::new(Mutex::new(Monitors::default())),
         })
     }
 
@@ -56,6 +59,7 @@ impl Jvm {
             self.class_loader.clone(),
             self.classes.clone(),
             self.heap.clone(),
+            self.monitors.clone(),
         );
 
         let main_handle = JvmThread::run_with_class(main_thread, self.main_class.clone());

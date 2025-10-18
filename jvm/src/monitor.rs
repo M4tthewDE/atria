@@ -1,45 +1,71 @@
-use anyhow::{Result, bail};
+use std::collections::HashMap;
 
-#[derive(Debug, Default, Clone)]
+use anyhow::{Result, bail};
+use tracing::info;
+
+use crate::{heap::HeapId, thread::ThreadId};
+
+#[derive(Debug)]
 pub struct Monitor {
-    owner: Option<i64>,
     entry_count: u64,
+    owner: Option<ThreadId>,
 }
 
 impl Monitor {
-    pub fn set_entry_count(&mut self, entry_count: u64) {
-        self.entry_count = entry_count;
-    }
-    pub fn entry_count(&self) -> u64 {
-        self.entry_count
-    }
-
-    pub fn increment_entry_count(&mut self) {
-        self.entry_count += 1;
+    fn new(thread_id: ThreadId) -> Self {
+        Self {
+            entry_count: 1,
+            owner: Some(thread_id),
+        }
     }
 
-    pub fn decrement_entry_count(&mut self) {
-        self.entry_count -= 1;
-    }
-
-    pub fn is_owner(&self, thread_id: i64) -> bool {
-        if let Some(owner_tid) = self.owner {
-            owner_tid == thread_id
+    fn owned_by(&self, thread_id: &ThreadId) -> bool {
+        if let Some(owner) = &self.owner {
+            owner == thread_id
         } else {
             false
         }
     }
+}
 
-    pub fn set_owner(&mut self, thread_id: i64) -> Result<()> {
-        if let Some(tid) = self.owner {
-            bail!("monitor is already owned by thread {tid}")
+#[derive(Debug, Default)]
+pub struct Monitors {
+    object_monitors: HashMap<HeapId, Monitor>,
+}
+
+impl Monitors {
+    pub fn enter_object_monitor(&mut self, heap_id: &HeapId, thread_id: &ThreadId) -> bool {
+        if let Some(monitor) = self.object_monitors.get_mut(heap_id) {
+            if monitor.owned_by(thread_id) {
+                monitor.entry_count += 1;
+            } else {
+                return false;
+            }
+        } else {
+            let monitor = Monitor::new(thread_id.clone());
+            self.object_monitors.insert(heap_id.clone(), monitor);
         }
 
-        self.owner = Some(thread_id);
-        Ok(())
+        info!("entered monitor for {heap_id:?} with thread {thread_id:?}");
+
+        true
     }
 
-    pub fn exit(&mut self) {
-        self.owner = None;
+    pub fn exit_object_monitor(&mut self, heap_id: &HeapId, thread_id: &ThreadId) -> Result<()> {
+        if let Some(monitor) = self.object_monitors.get_mut(heap_id) {
+            if monitor.owned_by(thread_id) {
+                monitor.entry_count -= 1;
+                if monitor.entry_count == 0 {
+                    monitor.owner = None;
+                    info!("thread {thread_id:?} is no longer the owner of {heap_id:?}");
+                }
+                info!("exited monitor for {heap_id:?} with thread {thread_id:?}");
+                Ok(())
+            } else {
+                bail!("TODO: IllegalMonitorAccessException");
+            }
+        } else {
+            bail!("no monitor found for {heap_id:?}");
+        }
     }
 }
