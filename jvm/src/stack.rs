@@ -1,4 +1,4 @@
-use crate::{ClassIdentifier, ReferenceValue, instruction::Instruction};
+use crate::{ClassIdentifier, ReferenceValue, heap::HeapId, instruction::Instruction};
 use anyhow::{Context, Result, bail};
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
@@ -17,6 +17,7 @@ impl Stack {
         max_locals: u16,
         code: Vec<u8>,
         class: ClassIdentifier,
+        object_ref: Option<HeapId>,
     ) {
         while local_variables.len() < max_locals.into() {
             local_variables.push(FrameValue::Reserved);
@@ -28,6 +29,7 @@ impl Stack {
             local_variables,
             code,
             class,
+            object_ref,
         ));
     }
 
@@ -125,6 +127,15 @@ impl Stack {
             .context("no caller found")?
             .class)
     }
+
+    pub fn object_ref(&self) -> Result<Option<HeapId>> {
+        Ok(self
+            .frames
+            .last()
+            .context("no frame found")?
+            .object_ref()
+            .clone())
+    }
 }
 
 #[derive(Debug)]
@@ -136,6 +147,7 @@ struct Frame {
     code: Vec<u8>,
     pc: usize,
     class: ClassIdentifier,
+    object_ref: Option<HeapId>,
 }
 
 impl Frame {
@@ -145,6 +157,7 @@ impl Frame {
         local_variables: Vec<FrameValue>,
         code: Vec<u8>,
         class: ClassIdentifier,
+        object_ref: Option<HeapId>,
     ) -> Self {
         let mut lvs = Vec::new();
         for lv in &local_variables {
@@ -163,6 +176,7 @@ impl Frame {
             code,
             pc: 0,
             class,
+            object_ref,
         }
     }
 
@@ -237,6 +251,10 @@ impl Frame {
 
     fn method_descriptor(&self) -> MethodDescriptor {
         self.method_descriptor.clone()
+    }
+
+    fn object_ref(&self) -> &Option<HeapId> {
+        &self.object_ref
     }
 }
 

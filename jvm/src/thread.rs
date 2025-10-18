@@ -118,6 +118,7 @@ impl JvmThread {
             max_locals,
             code.to_vec(),
             class_identifier.clone(),
+            None,
         );
         self.execute()
     }
@@ -381,6 +382,7 @@ impl JvmThread {
                 max_locals,
                 code.to_vec(),
                 identifier.clone(),
+                None,
             );
             self.execute()?;
         }
@@ -457,6 +459,7 @@ impl JvmThread {
                 max_locals,
                 code.to_vec(),
                 class.identifier().clone(),
+                None,
             );
             self.execute()?;
             debug!("executed <clinit> for {:?}", class.identifier());
@@ -1320,15 +1323,35 @@ impl JvmThread {
         let class = self.class(&class_identifier)?;
         let method_name = class.method_name(&method)?.to_string();
 
+        let heap_id = objectref.reference()?.heap_id().ok();
+
+        if method.is_synchronized() {
+            let thread_id = self
+                .current_thread_id
+                .clone()
+                .context("how do we not have a thread id?")?;
+            if let Some(heap_id) = heap_id {
+                if !self.enter_object_monitor(heap_id, &thread_id)? {
+                    bail!("TODO: wait for monitor to be available")
+                }
+            } else {
+                let identifier = objectref.reference()?.class_identifier()?;
+                if !self.enter_class_monitor(identifier, &thread_id)? {
+                    bail!("TODO: wait for monitor to be available")
+                }
+            }
+        }
+
         if !method.is_native() {
             let (code, max_locals) = method.code().context("method {method_name} has no code")?;
             self.stack.push(
                 method_name,
                 method_descriptor,
-                operands,
+                operands.clone(),
                 max_locals,
                 code.to_vec(),
                 class.identifier().clone(),
+                heap_id.cloned(),
             );
             self.execute()
         } else if let Some(return_value) = self.run_native_method(&class, &method_name, operands)? {
@@ -1357,6 +1380,7 @@ impl JvmThread {
             .pop_operands(method_descriptor.parameters.len() + 1)?;
 
         let reference = operands.first().context("no first operand")?.reference()?;
+        let heap_id = reference.heap_id()?;
         let class_identifier = self.class_identifier_from_reference(reference)?;
         let class = self.class(&class_identifier)?;
         let method = class.method(&name, &descriptor)?;
@@ -1364,10 +1388,11 @@ impl JvmThread {
         self.stack.push(
             name,
             method_descriptor,
-            operands,
+            operands.clone(),
             max_locals,
             code.to_vec(),
             class_identifier,
+            Some(heap_id.clone()),
         );
         self.execute()
     }
@@ -1414,6 +1439,7 @@ impl JvmThread {
                 max_locals,
                 code.to_vec(),
                 class_identifier,
+                None,
             );
             self.execute()
         }
@@ -1610,6 +1636,7 @@ impl JvmThread {
                 max_locals,
                 code.to_vec(),
                 class.identifier().clone(),
+                None,
             );
             self.execute()
         } else {
@@ -1930,7 +1957,7 @@ impl JvmThread {
                     class.identifier()
                 ),
             },
-            "java.lang.Reference" => match name {
+            "java.lang.ref.Reference" => match name {
                 // TODO: this will be used at some point
                 "waitForReferencePendingList" => {
                     warn!("parking this thread, reference pending list not implemented yet");
@@ -2203,14 +2230,18 @@ impl JvmThread {
         )?;
 
         if method.is_synchronized() {
+            let thread_id = self
+                .current_thread_id
+                .clone()
+                .context("how do we not have a thread id?")?;
             if method.is_static() {
-                let thread_id = self
-                    .current_thread_id
-                    .clone()
-                    .context("how do we not have a thread id?")?;
                 self.exit_class_monitor(current_class.identifier(), &thread_id)
             } else {
-                bail!("TODO: synchronized non static return");
+                let heap_id = self
+                    .stack
+                    .object_ref()?
+                    .context("no object_ref in current frame")?;
+                self.exit_object_monitor(&heap_id, &thread_id)
             }
         } else {
             Ok(())
