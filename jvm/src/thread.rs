@@ -307,6 +307,30 @@ impl JvmThread {
         monitors.exit_object_monitor(heap_id, thread_id)
     }
 
+    fn enter_class_monitor(
+        &mut self,
+        class_identifier: &ClassIdentifier,
+        thread_id: &ThreadId,
+    ) -> Result<bool> {
+        let mut monitors = self
+            .monitors
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        Ok(monitors.enter_class_monitor(class_identifier, thread_id))
+    }
+
+    fn exit_class_monitor(
+        &mut self,
+        class_identifier: &ClassIdentifier,
+        thread_id: &ThreadId,
+    ) -> Result<()> {
+        let mut monitors = self
+            .monitors
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        monitors.exit_class_monitor(class_identifier, thread_id)
+    }
+
     fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
         if let Some(c) = self.maybe_class(identifier)?
             && (c.initialized() || c.being_initialized())
@@ -462,6 +486,7 @@ impl JvmThread {
                 Instruction::Anewarray(ref index) => self.a_new_array(index)?,
                 Instruction::PutStatic(ref index) => self.put_static(index)?,
                 Instruction::Return => {
+                    self.handle_synchronized_return()?;
                     self.stack.pop()?;
                     break;
                 }
@@ -478,12 +503,14 @@ impl JvmThread {
                 Instruction::Dup2 => self.dup2()?,
                 Instruction::InvokeSpecial(ref index) => self.invoke_special(index)?,
                 Instruction::Areturn => {
+                    self.handle_synchronized_return()?;
                     let object_ref = self.stack.pop_operand()?;
                     self.stack.pop()?;
                     self.stack.push_operand(object_ref)?;
                     break;
                 }
                 Instruction::Dreturn => {
+                    self.handle_synchronized_return()?;
                     let double = self.stack.pop_operand()?;
                     self.stack.pop()?;
                     self.stack.push_operand(double)?;
@@ -492,6 +519,7 @@ impl JvmThread {
                 Instruction::InvokeDynamic(ref index) => self.invoke_dynamic(index)?,
                 Instruction::IfNonNull(offset) => self.if_non_null(offset)?,
                 Instruction::Ireturn => {
+                    self.handle_synchronized_return()?;
                     self.ireturn()?;
                     break;
                 }
@@ -514,6 +542,7 @@ impl JvmThread {
                     self.stack.push_operand(FrameValue::Int(value.into()))?
                 }
                 Instruction::Lreturn => {
+                    self.handle_synchronized_return()?;
                     self.lreturn()?;
                     break;
                 }
@@ -1358,7 +1387,13 @@ impl JvmThread {
         }
 
         if method.is_synchronized() {
-            bail!("TODO: enter synchronized static method");
+            let thread_id = self
+                .current_thread_id
+                .clone()
+                .context("how do we not have a thread id?")?;
+            if !self.enter_class_monitor(&class_identifier, &thread_id)? {
+                bail!("TODO: wait for monitor to be available")
+            }
         }
 
         let descriptor = class.method_descriptor(&method)?;
@@ -2157,6 +2192,28 @@ impl JvmThread {
                 Ok((class_identifier, name.to_string(), descriptor.to_string()))
             }
             _ => bail!("no method reference at index {index:?}"),
+        }
+    }
+
+    fn handle_synchronized_return(&mut self) -> Result<()> {
+        let current_class = self.current_class()?;
+        let method = current_class.method(
+            self.stack.method_name()?,
+            self.stack.method_descriptor()?.raw(),
+        )?;
+
+        if method.is_synchronized() {
+            if method.is_static() {
+                let thread_id = self
+                    .current_thread_id
+                    .clone()
+                    .context("how do we not have a thread id?")?;
+                self.exit_class_monitor(current_class.identifier(), &thread_id)
+            } else {
+                bail!("TODO: synchronized non static return");
+            }
+        } else {
+            Ok(())
         }
     }
 }

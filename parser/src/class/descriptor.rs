@@ -21,6 +21,7 @@ impl FieldDescriptor {
 
 #[derive(Debug, Clone)]
 pub struct MethodDescriptor {
+    raw: String,
     pub return_descriptor: ReturnDescriptor,
     pub parameters: Vec<FieldType>,
 }
@@ -59,6 +60,7 @@ impl MethodDescriptor {
         };
 
         Ok(Self {
+            raw: raw.to_string(),
             return_descriptor,
             parameters,
         })
@@ -66,6 +68,10 @@ impl MethodDescriptor {
 
     pub fn is_void(&self) -> bool {
         matches!(self.return_descriptor, ReturnDescriptor::Void)
+    }
+
+    pub fn raw(&self) -> &str {
+        &self.raw
     }
 }
 
