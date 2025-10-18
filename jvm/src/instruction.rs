@@ -134,8 +134,11 @@ pub enum Instruction {
     DupX1,
     Aaload,
     Lshl,
+    Ishl,
     MonitorEnter,
     MonitorExit,
+    Irem,
+    Ineg,
 }
 
 impl Instruction {
@@ -212,6 +215,9 @@ impl Instruction {
             0x68 => Instruction::Imul,
             0x69 => Instruction::Lmul,
             0x6e => Instruction::Fdiv,
+            0x70 => Instruction::Irem,
+            0x74 => Instruction::Ineg,
+            0x78 => Instruction::Ishl,
             0x79 => Instruction::Lshl,
             0x7a => Instruction::Ishr,
             0x7b => Instruction::Lshr,
@@ -391,8 +397,11 @@ impl Instruction {
             Self::Aaload => 1,
             Self::Dreturn => 1,
             Self::Lshl => 1,
+            Self::Ishl => 1,
             Self::MonitorEnter => 1,
             Self::MonitorExit => 1,
+            Self::Irem => 1,
+            Self::Ineg => 1,
         }
     }
 }

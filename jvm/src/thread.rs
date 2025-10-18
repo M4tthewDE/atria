@@ -593,6 +593,7 @@ impl JvmThread {
                 Instruction::Ishr => self.ishr()?,
                 Instruction::Lshr => self.lshr()?,
                 Instruction::Lshl => self.lshl()?,
+                Instruction::Ishl => self.ishl()?,
                 Instruction::Baload => self.baload()?,
                 Instruction::Aaload => self.aaload()?,
                 Instruction::I2c => self.i2c()?,
@@ -628,6 +629,8 @@ impl JvmThread {
                 Instruction::DupX1 => self.dup_x1()?,
                 Instruction::MonitorEnter => self.monitor_enter()?,
                 Instruction::MonitorExit => self.monitor_exit()?,
+                Instruction::Irem => self.irem()?,
+                Instruction::Ineg => self.ineg()?,
             }
 
             // TODO: this is very brittle
@@ -653,6 +656,22 @@ impl JvmThread {
         }
 
         Ok(())
+    }
+
+    fn ineg(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.int()?;
+        self.stack.push_operand(FrameValue::Int(-value))
+    }
+
+    fn irem(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+        if value2 == 0 {
+            bail!("TODO: ArithmeticException")
+        }
+
+        let result = value1 - (value1 / value2) * value2;
+        self.stack.push_operand(FrameValue::Int(result))
     }
 
     fn monitor_exit(&mut self) -> Result<()> {
@@ -837,6 +856,14 @@ impl JvmThread {
 
         let result = value1 << (value2 & 63);
         self.stack.push_operand(FrameValue::Long(result))
+    }
+
+    fn ishl(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        let result = value1 << (value2 & 31);
+        self.stack.push_operand(FrameValue::Int(result))
     }
 
     fn iinc(&mut self, index: usize, constant: i8) -> Result<()> {
