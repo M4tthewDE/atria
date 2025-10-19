@@ -244,7 +244,7 @@ impl Heap {
             .context(format!("unknown object with {id:?}"))?;
 
         match arr {
-            HeapItem::ReferenceArray { values, .. } => values.insert(index, value),
+            HeapItem::ReferenceArray { values, .. } => values[index] = value,
             _ => bail!("object at {id:?} is not a reference array, is {arr:?}"),
         }
 

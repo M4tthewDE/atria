@@ -140,7 +140,7 @@ impl Stack {
         let mut res = String::new();
         for frame in self.frames.iter().rev() {
             res.push_str(&format!(
-                "{:?}.{}()::{}\n",
+                "{:?}.{}::{}\n",
                 frame.class,
                 frame.method_name,
                 frame.code.line_number(frame.pc as u16).unwrap_or_default()
