@@ -227,7 +227,7 @@ impl Instruction {
             0x82 => Instruction::Ixor,
             0x84 => Instruction::Iinc(
                 *bytes.get(1).context("premature end of code")?,
-                *bytes.get(1).context("premature end of code")? as i8,
+                *bytes.get(2).context("premature end of code")? as i8,
             ),
             0x85 => Instruction::I2l,
             0x88 => Instruction::L2i,
