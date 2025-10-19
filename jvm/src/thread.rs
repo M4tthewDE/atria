@@ -12,8 +12,9 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
+use crate::code::Code;
 use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
 use crate::{ClassIdentifier, ReferenceValue};
@@ -68,7 +69,17 @@ impl JvmThread {
     }
 
     pub fn run_with_class(mut thread: Self, main_class: ClassIdentifier) -> JoinHandle<Result<()>> {
-        std::thread::spawn(move || thread.run_main(&main_class))
+        std::thread::spawn(move || match thread.run_main(&main_class) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!(
+                    "thread '{}' has crashed: {err:?} at\n{}",
+                    thread.name,
+                    thread.stack.stack_trace()
+                );
+                Err(err)
+            }
+        })
     }
 
     pub fn run_with_method(
@@ -80,7 +91,7 @@ impl JvmThread {
         std::thread::spawn(
             move || match thread.run_method(&class, &name, &descriptor) {
                 Ok(_) => {
-                    debug!("thread '{}' has exited normally", thread.name)
+                    info!("thread '{}' has exited normally", thread.name)
                 }
                 Err(err) => error!("thread '{}' has crashed: {err:?}", thread.name),
             },
@@ -108,15 +119,14 @@ impl JvmThread {
         let method = self.resolve_method(class_identifier, name, descriptor)?;
         let class = self.class(class_identifier)?;
         let descriptor = class.method_descriptor(&method)?;
-        let (code, max_locals) = method
+        let code = method
             .code()
             .context(format!("method {name} has no code"))?;
         self.stack.push(
             name.to_string(),
             descriptor,
             vec![],
-            max_locals,
-            code.to_vec(),
+            Code::new(code.clone())?,
             class_identifier.clone(),
             None,
         );
@@ -339,7 +349,7 @@ impl JvmThread {
             return Ok(c.clone());
         }
 
-        debug!("initializing {identifier:?}");
+        info!("initializing {identifier:?}");
         let class_file = self.load(identifier)?;
 
         let mut class = Class::new(identifier.clone(), class_file);
@@ -374,13 +384,12 @@ impl JvmThread {
             let descriptor = class.method_descriptor(&method)?;
 
             let operands = self.stack.pop_operands(descriptor.parameters.len())?;
-            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
+            let code = method.code().context("method {method_name} has no code")?;
             self.stack.push(
                 "initPhase1".to_string(),
                 descriptor,
                 operands,
-                max_locals,
-                code.to_vec(),
+                Code::new(code.clone())?,
                 identifier.clone(),
                 None,
             );
@@ -395,7 +404,7 @@ impl JvmThread {
             .context(format!("class {identifier:?} is not initialized"))?
             .finished_initialization();
 
-        debug!("initialized {identifier:?}");
+        info!("initialized {identifier:?}");
         Ok(class)
     }
 
@@ -449,20 +458,19 @@ impl JvmThread {
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
         if let Ok(clinit_method) = class.method("<clinit>", "()V") {
             let descriptor = class.method_descriptor(clinit_method)?;
-            let (code, max_locals) = clinit_method
+            let code = clinit_method
                 .code()
                 .context("no code found for <clinit> method")?;
             self.stack.push(
                 "<clinit>".to_string(),
                 descriptor,
                 vec![],
-                max_locals,
-                code.to_vec(),
+                Code::new(code.clone())?,
                 class.identifier().clone(),
                 None,
             );
+            info!("running <clinit> for {:?}", class.identifier());
             self.execute()?;
-            debug!("executed <clinit> for {:?}", class.identifier());
         }
 
         Ok(())
@@ -470,7 +478,7 @@ impl JvmThread {
 
     #[instrument(name = "", skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
-        debug!(
+        info!(
             "running {} {:?} {:?}",
             self.stack.method_name()?,
             self.stack.method_descriptor()?,
@@ -1370,13 +1378,14 @@ impl JvmThread {
         }
 
         if !method.is_native() {
-            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
+            let code = method
+                .code()
+                .context(format!("no code found for {name} method"))?;
             self.stack.push(
                 method_name,
                 method_descriptor,
                 operands.clone(),
-                max_locals,
-                code.to_vec(),
+                Code::new(code.clone())?,
                 class.identifier().clone(),
                 heap_id.cloned(),
             );
@@ -1411,13 +1420,14 @@ impl JvmThread {
         let class_identifier = self.class_identifier_from_reference(reference)?;
         let class = self.class(&class_identifier)?;
         let method = class.method(&name, &descriptor)?;
-        let (code, max_locals) = method.code().context("method {name} has no code")?;
+        let code = method
+            .code()
+            .context(format!("no code found for {name} method"))?;
         self.stack.push(
             name,
             method_descriptor,
             operands.clone(),
-            max_locals,
-            code.to_vec(),
+            Code::new(code.clone())?,
             class_identifier,
             Some(heap_id.clone()),
         );
@@ -1458,13 +1468,14 @@ impl JvmThread {
                 Ok(())
             }
         } else {
-            let (code, max_locals) = method.code().context("method {method_name} has no code")?;
+            let code = method
+                .code()
+                .context(format!("no code found for {name} method"))?;
             self.stack.push(
                 name,
                 descriptor,
                 operands,
-                max_locals,
-                code.to_vec(),
+                Code::new(code.clone())?,
                 class_identifier,
                 None,
             );
@@ -1653,15 +1664,14 @@ impl JvmThread {
             let operands = self
                 .stack
                 .pop_operands(method_descriptor.parameters.len() + 1)?;
-            let (code, max_locals) = method
+            let code = method
                 .code()
                 .context(format!("no code found for {name} method"))?;
             self.stack.push(
                 name.to_string(),
                 method_descriptor,
                 operands,
-                max_locals,
-                code.to_vec(),
+                Code::new(code.clone())?,
                 class.identifier().clone(),
                 None,
             );
@@ -1735,7 +1745,7 @@ impl JvmThread {
         name: &str,
         operands: Vec<FrameValue>,
     ) -> Result<Option<FrameValue>> {
-        debug!(
+        info!(
             "running native method '{name}' in {:?} with operands {:?}",
             class.identifier(),
             operands

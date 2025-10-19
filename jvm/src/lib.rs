@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub mod class;
+mod code;
 pub mod heap;
 pub mod instruction;
 pub mod jar;

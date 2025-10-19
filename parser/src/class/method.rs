@@ -49,13 +49,10 @@ impl Method {
         Ok(methods)
     }
 
-    pub fn code(&self) -> Option<(&Vec<u8>, u16)> {
-        self.attributes.iter().find_map(|attr| match attr {
-            Attribute::Code {
-                code, max_locals, ..
-            } => Some((code, *max_locals)),
-            _ => None,
-        })
+    pub fn code(&self) -> Option<&Attribute> {
+        self.attributes
+            .iter()
+            .find(|attr| matches!(attr, Attribute::Code { .. }))
     }
 
     pub fn name<'a>(&self, cp: &'a ConstantPool) -> Result<&'a str> {

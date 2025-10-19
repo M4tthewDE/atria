@@ -1,4 +1,4 @@
-use crate::{ClassIdentifier, ReferenceValue, heap::HeapId, instruction::Instruction};
+use crate::{ClassIdentifier, ReferenceValue, code::Code, heap::HeapId, instruction::Instruction};
 use anyhow::{Context, Result, bail};
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
@@ -14,12 +14,11 @@ impl Stack {
         method_name: String,
         method_descriptor: MethodDescriptor,
         mut local_variables: Vec<FrameValue>,
-        max_locals: u16,
-        code: Vec<u8>,
+        code: Code,
         class: ClassIdentifier,
         object_ref: Option<HeapId>,
     ) {
-        while local_variables.len() < max_locals.into() {
+        while local_variables.len() < code.max_locals().into() {
             local_variables.push(FrameValue::Reserved);
         }
 
@@ -136,6 +135,20 @@ impl Stack {
             .object_ref()
             .clone())
     }
+
+    pub fn stack_trace(&self) -> String {
+        let mut res = String::new();
+        for frame in self.frames.iter().rev() {
+            res.push_str(&format!(
+                "{:?}.{}()::{}\n",
+                frame.class,
+                frame.method_name,
+                frame.code.line_number(frame.pc as u16).unwrap_or_default()
+            ));
+        }
+
+        res
+    }
 }
 
 #[derive(Debug)]
@@ -144,7 +157,7 @@ struct Frame {
     method_descriptor: MethodDescriptor,
     operand_stack: Vec<FrameValue>,
     local_variables: Vec<FrameValue>,
-    code: Vec<u8>,
+    code: Code,
     pc: usize,
     class: ClassIdentifier,
     object_ref: Option<HeapId>,
@@ -155,7 +168,7 @@ impl Frame {
         method_name: String,
         method_descriptor: MethodDescriptor,
         local_variables: Vec<FrameValue>,
-        code: Vec<u8>,
+        code: Code,
         class: ClassIdentifier,
         object_ref: Option<HeapId>,
     ) -> Self {
@@ -214,7 +227,7 @@ impl Frame {
     }
 
     fn current_instruction(&mut self) -> Result<Instruction> {
-        Instruction::new(&self.code[self.pc..])
+        Instruction::new(&self.code.instructions()[self.pc..])
             .context(format!("no instruction found at pc {}", self.pc))
     }
 
