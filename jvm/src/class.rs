@@ -142,6 +142,17 @@ impl Class {
             .access_flags
             .contains(&AccessFlag::Interface)
     }
+
+    pub fn implements(&self, interface_identifier: &ClassIdentifier) -> Result<bool> {
+        for interface in &self.class_file.interfaces {
+            let class = self.class_identifier(interface)?;
+            if &class == interface_identifier {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
 }
 
 #[derive(Clone, Debug)]

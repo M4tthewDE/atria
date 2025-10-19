@@ -476,13 +476,13 @@ impl JvmThread {
         Ok(())
     }
 
-    #[instrument(name = "", skip(self), fields(c = %self.stack.current_class()?))]
+    #[instrument(level = "debug", name = "", skip(self), fields(c = %self.stack.current_class()?))]
     fn execute(&mut self) -> Result<()> {
         info!(
-            "running {} {:?} {:?}",
+            "running {} {:?} in {:?}",
             self.stack.method_name()?,
-            self.stack.method_descriptor()?,
             self.stack.local_variables()?,
+            self.stack.current_class()?,
         );
         loop {
             let instruction = self.stack.current_instruction()?;
@@ -574,6 +574,7 @@ impl JvmThread {
                 Instruction::Iload3 => self.iload(3)?,
                 Instruction::Fconst(val) => self.stack.push_operand(FrameValue::Float(val))?,
                 Instruction::Fcmpl => self.fcmpl()?,
+                Instruction::Fcmpg => self.fcmpg()?,
                 Instruction::Ifle(offset) => self.if_le(offset)?,
                 Instruction::Iflt(offset) => self.if_lt(offset)?,
                 Instruction::IfIcmpge(offset) => self.if_icmpge(offset)?,
@@ -583,6 +584,7 @@ impl JvmThread {
                 Instruction::L2f => self.l2f()?,
                 Instruction::Fdiv => self.fdiv()?,
                 Instruction::F2d => self.f2d()?,
+                Instruction::F2i => self.f2i()?,
                 Instruction::Dadd => self.dadd()?,
                 Instruction::Fadd => self.fadd()?,
                 Instruction::D2l => self.d2l()?,
@@ -596,6 +598,7 @@ impl JvmThread {
                 Instruction::IfIcmplt(offset) => self.if_icmplt(offset)?,
                 Instruction::Iinc(index, constant) => self.iinc(index as usize, constant)?,
                 Instruction::Iushr => self.iushr()?,
+                Instruction::Lushr => self.lushr()?,
                 Instruction::Ifge(offset) => self.if_ge(offset)?,
                 Instruction::Iadd => self.iadd()?,
                 Instruction::Ladd => self.ladd()?,
@@ -743,17 +746,29 @@ impl JvmThread {
             bail!("TOOD: instanceof for arrays")
         }
 
+        warn!(
+            "check_cast: objectref class {:?}",
+            heap_item.class_identifier()?
+        );
+
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
-                self.resolve_class(&identifier)?;
+                let class = self.resolve_class(&identifier)?;
                 let object_identifier = heap_item.class_identifier()?;
+
+                if class.is_interface() {
+                    let object_ref_class = self.resolve_class(object_identifier)?;
+                    if object_ref_class.implements(&identifier)? {
+                        return self.stack.push_operand(operand);
+                    }
+                }
 
                 if object_identifier == &identifier {
                     return self.stack.push_operand(operand);
                 }
 
-                bail!("TODO: check super classes")
+                bail!("TODO: return false?");
             }
             item => bail!("invalid instanceof type {item:?}"),
         }
@@ -825,7 +840,7 @@ impl JvmThread {
         let values = self.get_reference_array(arrayref.heap_id()?)?;
         let reference = values
             .get(index as usize)
-            .context("no array value at index {index}")?;
+            .context(format!("no array value at index {index}"))?;
 
         self.stack
             .push_operand(FrameValue::Reference(reference.clone()))
@@ -844,6 +859,14 @@ impl JvmThread {
 
         let result = ((value1 as u32) >> (value2 & 31)) as i32;
         self.stack.push_operand(FrameValue::Int(result))
+    }
+
+    fn lushr(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        let result = ((value1 as u64) >> (value2 & 31)) as i64;
+        self.stack.push_operand(FrameValue::Long(result))
     }
 
     fn ishr(&mut self) -> Result<()> {
@@ -985,6 +1008,11 @@ impl JvmThread {
         self.stack.push_operand(FrameValue::Double(value.into()))
     }
 
+    fn f2i(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.float()?;
+        self.stack.push_operand(FrameValue::Int(value as i32))
+    }
+
     fn fdiv(&mut self) -> Result<()> {
         let value2 = self.stack.pop_operand()?.float()?;
         let value1 = self.stack.pop_operand()?.float()?;
@@ -1016,6 +1044,23 @@ impl JvmThread {
             FrameValue::Int(0)
         } else {
             FrameValue::Int(-1)
+        };
+
+        self.stack.push_operand(value)
+    }
+
+    fn fcmpg(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.float()?;
+        let value1 = self.stack.pop_operand()?.float()?;
+
+        let value = if value1 > value2 {
+            FrameValue::Int(1)
+        } else if value1 == value2 {
+            FrameValue::Int(0)
+        } else if value1 < value2 {
+            FrameValue::Int(-1)
+        } else {
+            FrameValue::Int(1)
         };
 
         self.stack.push_operand(value)
