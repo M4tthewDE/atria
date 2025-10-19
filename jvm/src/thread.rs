@@ -517,6 +517,7 @@ impl JvmThread {
                     self.handle_synchronized_return()?;
                     let object_ref = self.stack.pop_operand()?;
                     self.stack.pop()?;
+                    info!("returning {object_ref:?}");
                     self.stack.push_operand(object_ref)?;
                     break;
                 }
@@ -524,6 +525,7 @@ impl JvmThread {
                     self.handle_synchronized_return()?;
                     let double = self.stack.pop_operand()?;
                     self.stack.pop()?;
+                    info!("returning {double:?}");
                     self.stack.push_operand(double)?;
                     break;
                 }
@@ -746,11 +748,6 @@ impl JvmThread {
             bail!("TOOD: instanceof for arrays")
         }
 
-        warn!(
-            "check_cast: objectref class {:?}",
-            heap_item.class_identifier()?
-        );
-
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
@@ -850,6 +847,7 @@ impl JvmThread {
         let operand = self.stack.pop_operand()?;
         let heap_id = operand.reference()?.heap_id()?;
         let len = self.get_array_length(heap_id)?;
+        debug!("array_length {len}");
         self.stack.push_operand(FrameValue::Int(len as i32))
     }
 
@@ -865,7 +863,7 @@ impl JvmThread {
         let value2 = self.stack.pop_operand()?.int()?;
         let value1 = self.stack.pop_operand()?.long()?;
 
-        let result = ((value1 as u64) >> (value2 & 31)) as i64;
+        let result = ((value1 as u64) >> (value2 & 63)) as i64;
         self.stack.push_operand(FrameValue::Long(result))
     }
 
@@ -1208,6 +1206,7 @@ impl JvmThread {
         }
 
         let heap_id = object_ref.reference()?.heap_id()?;
+        debug!("put field {name}: {value:?}");
         self.heap_set_field(heap_id, &name, value.into())
     }
 
@@ -1357,6 +1356,7 @@ impl JvmThread {
 
         if operand.long().is_ok() {
             self.stack.pop()?;
+            info!("returning {operand:?}");
             self.stack.push_operand(operand)
         } else {
             bail!("ireturn can only return int, is {operand:?}")
@@ -1368,6 +1368,7 @@ impl JvmThread {
 
         if operand.int().is_ok() {
             self.stack.pop()?;
+            info!("returning {operand:?}");
             self.stack.push_operand(operand)
         } else {
             bail!("ireturn can only return int, is {operand:?}")
@@ -1567,6 +1568,7 @@ impl JvmThread {
 
         self.resolve_field(&identifier, &name, descriptor.raw())?;
         let value = self.stack.pop_operand()?;
+        debug!("put static field {name}: {value:?}");
         let mut classes = self
             .classes
             .lock()
@@ -1609,6 +1611,7 @@ impl JvmThread {
         } else {
             let heap_id = object_ref.reference()?.heap_id()?;
             let field_value = self.heap_get_field(heap_id, &name)?;
+            debug!("get field {name}: {field_value:?}");
             self.stack.push_operand(field_value.into())
         }
     }
