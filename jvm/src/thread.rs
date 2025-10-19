@@ -579,13 +579,17 @@ impl JvmThread {
                 Instruction::IfIcmpge(offset) => self.if_icmpge(offset)?,
                 Instruction::Dconst(val) => self.stack.push_operand(FrameValue::Double(val))?,
                 Instruction::I2l => self.i2l()?,
+                Instruction::I2f => self.i2f()?,
                 Instruction::L2f => self.l2f()?,
                 Instruction::Fdiv => self.fdiv()?,
                 Instruction::F2d => self.f2d()?,
                 Instruction::Dadd => self.dadd()?,
+                Instruction::Fadd => self.fadd()?,
                 Instruction::D2l => self.d2l()?,
                 Instruction::Lstore(index) => self.lstore(index)?,
+                Instruction::Fstore(index) => self.fstore(index)?,
                 Instruction::Lload(index) => self.lload(index)?,
+                Instruction::Fload(index) => self.fload(index)?,
                 Instruction::Ldc2W(ref index) => self.ldc2_w(index)?,
                 Instruction::Lcmp => self.lcmp()?,
                 Instruction::L2i => self.l2i()?,
@@ -927,6 +931,15 @@ impl JvmThread {
         self.stack.set_local_variable(index.into(), value)
     }
 
+    fn fstore(&mut self, index: u8) -> Result<()> {
+        let value = self.stack.pop_operand()?;
+        if value.float().is_err() {
+            bail!("fstore can only store floats, is {value:?}")
+        }
+
+        self.stack.set_local_variable(index.into(), value)
+    }
+
     fn i2c(&mut self) -> Result<()> {
         let int = self.stack.pop_operand()?.int()?;
         let char = int as u16;
@@ -961,6 +974,12 @@ impl JvmThread {
         self.stack.push_operand(FrameValue::Double(value1 + value2))
     }
 
+    fn fadd(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.float()?;
+        let value1 = self.stack.pop_operand()?.float()?;
+        self.stack.push_operand(FrameValue::Float(value1 + value2))
+    }
+
     fn f2d(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?.float()?;
         self.stack.push_operand(FrameValue::Double(value.into()))
@@ -975,6 +994,11 @@ impl JvmThread {
     fn i2l(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?.int()?;
         self.stack.push_operand(FrameValue::Long(value.into()))
+    }
+
+    fn i2f(&mut self) -> Result<()> {
+        let value = self.stack.pop_operand()?.int()?;
+        self.stack.push_operand(FrameValue::Float(value as f32))
     }
 
     fn l2f(&mut self) -> Result<()> {
