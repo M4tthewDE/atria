@@ -638,6 +638,7 @@ impl JvmThread {
                 Instruction::Lload3 => self.lload(3)?,
                 Instruction::Lmul => self.lmul()?,
                 Instruction::Imul => self.imul()?,
+                Instruction::Fmul => self.fmul()?,
                 Instruction::InvokeInterface(ref index, count) => {
                     self.invoke_interface(index, count)?
                 }
@@ -910,6 +911,12 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
         self.stack
             .push_operand(FrameValue::Int(value1.wrapping_mul(value2)))
+    }
+
+    fn fmul(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.float()?;
+        let value1 = self.stack.pop_operand()?.float()?;
+        self.stack.push_operand(FrameValue::Float(value1 * value2))
     }
 
     fn lmul(&mut self) -> Result<()> {

@@ -302,7 +302,7 @@ impl FrameValue {
         if let Self::Int(int) = self {
             Ok(*int)
         } else {
-            bail!("frame value is not a int")
+            bail!("frame value is not a int, is {self:?}")
         }
     }
 

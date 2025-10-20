@@ -135,6 +135,7 @@ pub enum Instruction {
     Lload2,
     Lload3,
     Lmul,
+    Fmul,
     Ladd,
     Imul,
     InvokeInterface(CpIndex, u8),
@@ -224,6 +225,7 @@ impl Instruction {
             0x64 => Instruction::Isub,
             0x68 => Instruction::Imul,
             0x69 => Instruction::Lmul,
+            0x6a => Instruction::Fmul,
             0x6e => Instruction::Fdiv,
             0x70 => Instruction::Irem,
             0x74 => Instruction::Ineg,
@@ -330,7 +332,7 @@ impl Instruction {
             Self::Iastore => 1,
             Self::Sipush(_) => 3,
             Self::Lreturn => 1,
-            Self::Istore(_) => 1,
+            Self::Istore(_) => 2,
             Self::Isub => 1,
             Self::Iand => 1,
             Self::Ifeq(_) => 3,
@@ -423,6 +425,7 @@ impl Instruction {
             Self::Fload(_) => 2,
             Self::Fcmpg => 1,
             Self::F2i => 1,
+            Self::Fmul => 1,
         }
     }
 }

@@ -99,7 +99,6 @@ impl PrimitiveArrayType {
         })
     }
 
-    // TODO: this should be the trait
     pub fn default(&self) -> PrimitiveArrayValue {
         match self {
             Self::Boolean => PrimitiveArrayValue::Boolean(false),
