@@ -790,17 +790,39 @@ impl JvmThread {
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
-                self.resolve_class(&identifier)?;
+                let class = self.resolve_class(&identifier)?;
                 let object_identifier = heap_item.class_identifier()?;
+
+                if class.is_interface() {
+                    bail!("TODO: instanceof check with interface")
+                }
 
                 if object_identifier == &identifier {
                     return self.stack.push_operand(FrameValue::Int(1));
                 }
 
-                bail!("TODO: check super classes")
+                if self.check_super_classes(&class, &identifier)? {
+                    return self.stack.push_operand(FrameValue::Int(1));
+                }
+
+                self.stack.push_operand(FrameValue::Int(0))
             }
             item => bail!("invalid instanceof type {item:?}"),
         }
+    }
+
+    fn check_super_classes(&mut self, class: &Class, identifier: &ClassIdentifier) -> Result<bool> {
+        if class.has_super_class() {
+            let super_class = class.super_class()?;
+            if &super_class == identifier {
+                return Ok(true);
+            }
+
+            let class = self.resolve_class(&super_class)?;
+            return self.check_super_classes(&class, identifier);
+        }
+
+        Ok(false)
     }
 
     fn baload(&mut self) -> Result<()> {
