@@ -614,6 +614,7 @@ impl JvmThread {
                 Instruction::Baload => self.baload()?,
                 Instruction::Aaload => self.aaload()?,
                 Instruction::I2c => self.i2c()?,
+                Instruction::I2b => self.i2b()?,
                 Instruction::IfIcmpne(offset) => self.if_icmpne(offset)?,
                 Instruction::IfIcmpgt(offset) => self.if_icmpgt(offset)?,
                 Instruction::IfIcmple(offset) => self.if_icmple(offset)?,
@@ -1029,6 +1030,12 @@ impl JvmThread {
         let int = self.stack.pop_operand()?.int()?;
         let char = int as u16;
         self.stack.push_operand(FrameValue::Int(char as i32))
+    }
+
+    fn i2b(&mut self) -> Result<()> {
+        let int = self.stack.pop_operand()?.int()?;
+        let byte = int as i8;
+        self.stack.push_operand(FrameValue::Int(byte as i32))
     }
 
     fn l2i(&mut self) -> Result<()> {
