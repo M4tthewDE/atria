@@ -206,6 +206,10 @@ impl ReferenceValue {
     pub fn is_null(&self) -> bool {
         matches!(self, Self::Null)
     }
+
+    pub fn is_class(&self) -> bool {
+        matches!(self, Self::Class(_))
+    }
 }
 
 #[cfg(test)]

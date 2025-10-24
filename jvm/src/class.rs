@@ -133,6 +133,30 @@ impl Class {
         &self.class_file.fields
     }
 
+    pub fn overriden_method(
+        &self,
+        m_a: &Method,
+        m_a_name: &str,
+        m_a_descriptor: &MethodDescriptor,
+    ) -> Result<Option<Method>> {
+        for m_c in &self.class_file.methods {
+            let same_name = self.method_name(m_c)? == m_a_name;
+            let same_descriptor = self.method_descriptor(m_c)? == *m_a_descriptor;
+            // TODO: there is more to this
+            let transitive_overriding =
+                !m_a.is_public() && !m_a.is_protected() && !m_a.is_private();
+            if same_name
+                && same_descriptor
+                && !m_a.is_private()
+                && (m_a.is_public() || m_a.is_protected() || transitive_overriding)
+            {
+                return Ok(Some(m_c.clone()));
+            }
+        }
+
+        Ok(None)
+    }
+
     pub fn contains_method(&self, method: &Method) -> bool {
         self.class_file.methods.contains(method)
     }

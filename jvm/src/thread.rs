@@ -116,7 +116,7 @@ impl JvmThread {
         name: &str,
         descriptor: &str,
     ) -> Result<()> {
-        let method = self.resolve_method(class_identifier, name, descriptor)?;
+        let (_, method) = self.resolve_method(class_identifier, name, descriptor)?;
         let class = self.class(class_identifier)?;
         let descriptor = class.method_descriptor(&method)?;
         let code = method
@@ -379,7 +379,7 @@ impl JvmThread {
 
         self.execute_clinit(&class)?;
         if identifier == &ClassIdentifier::new("java.lang.System")? {
-            let method = self.resolve_method(identifier, "initPhase1", "()V")?;
+            let (_, method) = self.resolve_method(identifier, "initPhase1", "()V")?;
             let class = self.class(identifier)?;
             let descriptor = class.method_descriptor(&method)?;
 
@@ -1442,8 +1442,10 @@ impl JvmThread {
 
     fn invoke_virtual(&mut self, index: &CpIndex) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
-        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
+        let (class_identifier, method) =
+            self.resolve_method(&class_identifier, &name, &descriptor)?;
         let class = self.class(&class_identifier)?;
+
         let method_descriptor = MethodDescriptor::new(class.utf8(&method.descriptor_index)?)?;
         let operands = self
             .stack
@@ -1454,7 +1456,18 @@ impl JvmThread {
             bail!("TODO: throw NullPointerException");
         }
 
-        let class = self.class(&class_identifier)?;
+        let (class, method) = if method.is_private()
+            || class_identifier == ClassIdentifier::new("java.lang.Class")?
+            || objectref.reference()?.is_class()
+        {
+            (class, method)
+        } else {
+            let objectref_identifier = self.class_identifier(objectref.reference()?)?;
+            let class = self.class(&objectref_identifier)?;
+            let (class, method) = self.select_method(&class, &method, &name, &method_descriptor)?;
+            (class, method)
+        };
+
         let method_name = class.method_name(&method)?.to_string();
 
         let heap_id = objectref.reference()?.heap_id().ok();
@@ -1494,6 +1507,23 @@ impl JvmThread {
         } else {
             Ok(())
         }
+    }
+
+    fn select_method(
+        &self,
+        class: &Class,
+        method: &Method,
+        name: &str,
+        method_descriptor: &MethodDescriptor,
+    ) -> Result<(Class, Method)> {
+        if let Some(m) = class.overriden_method(method, name, method_descriptor)? {
+            return Ok((class.clone(), m));
+        } else if class.has_super_class() {
+            let super_class = self.class(&class.super_class()?)?;
+            return self.select_method(&super_class, method, name, method_descriptor);
+        }
+
+        bail!("no method found")
     }
 
     fn invoke_interface(&mut self, index: &CpIndex, _: u8) -> Result<()> {
@@ -1536,7 +1566,7 @@ impl JvmThread {
     fn invoke_static(&mut self, index: &CpIndex) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
 
-        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
+        let (_, method) = self.resolve_method(&class_identifier, &name, &descriptor)?;
         let class = self.class(&class_identifier)?;
 
         if !method.is_static() {
@@ -1745,7 +1775,7 @@ impl JvmThread {
 
     fn invoke_special(&mut self, index: &CpIndex) -> Result<()> {
         let (class_identifier, name, descriptor) = self.method_ref(index)?;
-        let method = self.resolve_method(&class_identifier, &name, &descriptor)?;
+        let (_, method) = self.resolve_method(&class_identifier, &name, &descriptor)?;
         let class = self.initialize(&class_identifier)?;
         let method_descriptor = class.method_descriptor(&method)?;
 
@@ -2253,7 +2283,7 @@ impl JvmThread {
         class: &ClassIdentifier,
         name: &str,
         descriptor: &str,
-    ) -> Result<Method> {
+    ) -> Result<(ClassIdentifier, Method)> {
         let class = self.initialize(class)?;
 
         if let Ok(m) = class.method(name, descriptor) {
@@ -2261,12 +2291,12 @@ impl JvmThread {
                 bail!("TODO: method is signature polymorphic");
             }
 
-            Ok(m.clone())
+            Ok((class.identifier().clone(), m.clone()))
         } else {
             let super_class = class
                 .super_class()
                 .context("method not found, maybe check interfaces?")?;
-            self.resolve_method(&super_class, name, descriptor)
+            self.resolve_method(&super_class.clone(), name, descriptor)
         }
     }
 
@@ -2357,6 +2387,16 @@ impl JvmThread {
                 Ok((class_identifier, name.to_string(), descriptor.to_string()))
             }
             _ => bail!("no method reference at index {index:?}"),
+        }
+    }
+
+    fn class_identifier(&self, reference: &ReferenceValue) -> Result<ClassIdentifier> {
+        match reference {
+            ReferenceValue::HeapItem(heap_id) => {
+                self.heap_get(heap_id)?.class_identifier().cloned()
+            }
+            ReferenceValue::Class(class_identifier) => Ok(class_identifier.clone()),
+            ReferenceValue::Null => bail!("reference is null"),
         }
     }
 

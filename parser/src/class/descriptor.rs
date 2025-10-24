@@ -19,7 +19,7 @@ impl FieldDescriptor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MethodDescriptor {
     raw: String,
     pub return_descriptor: ReturnDescriptor,

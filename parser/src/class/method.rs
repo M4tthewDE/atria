@@ -88,6 +88,14 @@ impl Method {
         self.access_flags.contains(&AccessFlag::Public)
     }
 
+    pub fn is_protected(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Protected)
+    }
+
+    pub fn is_private(&self) -> bool {
+        self.access_flags.contains(&AccessFlag::Private)
+    }
+
     pub fn is_abstract(&self) -> bool {
         self.access_flags.contains(&AccessFlag::Abstract)
     }
