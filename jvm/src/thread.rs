@@ -2003,6 +2003,30 @@ impl JvmThread {
                         ClassIdentifier::new(&name)?,
                     ))))
                 }
+                "isPrimitive" => {
+                    let value = match format!(
+                        "{:?}",
+                        operands
+                            .first()
+                            .context("no first operand")?
+                            .reference()?
+                            .class_identifier()?
+                    )
+                    .as_str()
+                    {
+                        "java.lang.Byte" => FrameValue::Int(1),
+                        "java.lang.Character" => FrameValue::Int(1),
+                        "java.lang.Double" => FrameValue::Int(1),
+                        "java.lang.Float" => FrameValue::Int(1),
+                        "java.lang.Integer" => FrameValue::Int(1),
+                        "java.lang.Long" => FrameValue::Int(1),
+                        "java.lang.Short" => FrameValue::Int(1),
+                        "java.lang.Boolean" => FrameValue::Int(1),
+                        "java.lang.Void" => FrameValue::Int(1),
+                        _ => FrameValue::Int(0),
+                    };
+                    Ok(Some(value))
+                }
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
