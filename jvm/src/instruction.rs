@@ -147,10 +147,17 @@ pub enum Instruction {
     MonitorExit,
     Irem,
     Ineg,
+    TableSwitch {
+        skip: usize,
+        default: i32,
+        low: i32,
+        high: i32,
+        jump_offsets: Vec<i32>,
+    },
 }
 
 impl Instruction {
-    pub fn new(bytes: &[u8]) -> Result<Self> {
+    pub fn new(bytes: &[u8], pc: usize) -> Result<Self> {
         Ok(match bytes.first().context("premature end of code")? {
             0x1 => Instruction::AconstNull,
             0x2 => Instruction::Iconst(-1),
@@ -267,6 +274,7 @@ impl Instruction {
             0xa4 => Instruction::IfIcmple(offset(bytes)?),
             0xa6 => Instruction::IfAcmpne(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
+            0xaa => table_switch(bytes, pc)?,
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
             0xaf => Instruction::Dreturn,
@@ -426,6 +434,41 @@ impl Instruction {
             Self::Fcmpg => 1,
             Self::F2i => 1,
             Self::Fmul => 1,
+            Self::TableSwitch {
+                skip, jump_offsets, ..
+            } => skip + 12 + jump_offsets.len() * 4,
         }
     }
+}
+
+fn table_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
+    let skip = 4 - pc;
+    let bytes = &bytes[4 - pc..];
+    let default = i32::from_be_bytes(bytes[..4].try_into()?);
+    let bytes = &bytes[4..];
+    let low = i32::from_be_bytes(bytes[..4].try_into()?);
+    let bytes = &bytes[4..];
+    let high = i32::from_be_bytes(bytes[..4].try_into()?);
+
+    let mut bytes = &bytes[4..];
+    let mut jump_offsets = Vec::new();
+    for _ in 0..(high - low + 1) {
+        let offset = i32::from_be_bytes(bytes[..4].try_into()?);
+        jump_offsets.push(offset);
+        bytes = &bytes[4..];
+    }
+
+    tracing::warn!("default: {default}");
+    tracing::warn!("low: {low}");
+    tracing::warn!("high: {high}");
+    tracing::warn!("offsets: {jump_offsets:?}");
+
+    // FIXME: is skip needed here?
+    Ok(Instruction::TableSwitch {
+        skip,
+        default,
+        low,
+        high,
+        jump_offsets,
+    })
 }

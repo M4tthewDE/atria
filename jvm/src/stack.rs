@@ -95,7 +95,7 @@ impl Stack {
         Ok(&self.frames.last().context("no frame found")?.method_name)
     }
 
-    pub fn offset_pc(&mut self, offset: i16) -> Result<()> {
+    pub fn offset_pc(&mut self, offset: i32) -> Result<()> {
         self.frames
             .last_mut()
             .context("no frame found")?
@@ -227,7 +227,7 @@ impl Frame {
     }
 
     fn current_instruction(&mut self) -> Result<Instruction> {
-        Instruction::new(&self.code.instructions()[self.pc..])
+        Instruction::new(&self.code.instructions()[self.pc..], self.pc)
             .context(format!("no instruction found at pc {}", self.pc))
     }
 
@@ -247,7 +247,7 @@ impl Frame {
         Ok(())
     }
 
-    fn offset_pc(&mut self, offset: i16) -> Result<()> {
+    fn offset_pc(&mut self, offset: i32) -> Result<()> {
         if offset < 0 {
             let offset = offset.unsigned_abs() as usize;
             if offset > self.pc {

@@ -564,7 +564,7 @@ impl JvmThread {
                 Instruction::Iand => self.iand()?,
                 Instruction::Land => self.land()?,
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
-                Instruction::Goto(offset) => self.stack.offset_pc(offset)?,
+                Instruction::Goto(offset) => self.stack.offset_pc(offset as i32)?,
                 Instruction::Ifgt(offset) => self.if_gt(offset)?,
                 Instruction::Fload0 => self.fload(0)?,
                 Instruction::Fload1 => self.fload(1)?,
@@ -649,6 +649,13 @@ impl JvmThread {
                 Instruction::MonitorExit => self.monitor_exit()?,
                 Instruction::Irem => self.irem()?,
                 Instruction::Ineg => self.ineg()?,
+                Instruction::TableSwitch {
+                    default,
+                    low,
+                    high,
+                    ref jump_offsets,
+                    ..
+                } => self.table_switch(default, low, high, jump_offsets)?,
             }
 
             // TODO: this is very brittle
@@ -669,11 +676,31 @@ impl JvmThread {
                 | Instruction::IfIcmpne(_)
                 | Instruction::IfAcmpne(_)
                 | Instruction::Goto(_) => {}
-                _ => self.stack.offset_pc(instruction.length() as i16)?,
+                Instruction::TableSwitch { .. } => {}
+                _ => self.stack.offset_pc(instruction.length() as i32)?,
             }
         }
 
         Ok(())
+    }
+
+    fn table_switch(
+        &mut self,
+        default: i32,
+        low: i32,
+        high: i32,
+        jump_offsets: &[i32],
+    ) -> Result<()> {
+        let index = self.stack.pop_operand()?.int()?;
+        if index < low || index > high {
+            self.stack.offset_pc(default)
+        } else {
+            self.stack.offset_pc(
+                *jump_offsets
+                    .get(index as usize - low as usize)
+                    .context(format!("no jump offset at index {index} found"))?,
+            )
+        }
     }
 
     fn ineg(&mut self) -> Result<()> {
@@ -1252,7 +1279,7 @@ impl JvmThread {
     fn if_ge(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? >= 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1261,7 +1288,7 @@ impl JvmThread {
     fn if_lt(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? < 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1272,7 +1299,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 > value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1283,7 +1310,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 <= value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1294,7 +1321,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 != value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1305,7 +1332,7 @@ impl JvmThread {
         let operand1 = self.stack.pop_operand()?;
 
         if operand1.reference()? != operand2.reference()? {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1316,7 +1343,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 == value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1327,7 +1354,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 < value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1338,7 +1365,7 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         if value1 >= value2 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1347,7 +1374,7 @@ impl JvmThread {
     fn if_le(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? <= 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1356,7 +1383,7 @@ impl JvmThread {
     fn if_gt(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? > 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1365,7 +1392,7 @@ impl JvmThread {
     fn if_eq(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? == 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1374,7 +1401,7 @@ impl JvmThread {
     fn if_ne(&mut self, offset: i16) -> Result<()> {
         let operand = self.stack.pop_operand()?;
         if operand.int()? != 0 {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1713,7 +1740,7 @@ impl JvmThread {
         }
 
         if value.is_null() {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
@@ -1726,7 +1753,7 @@ impl JvmThread {
         }
 
         if !value.is_null() {
-            self.stack.offset_pc(offset)
+            self.stack.offset_pc(offset as i32)
         } else {
             self.stack.offset_pc(3)
         }
