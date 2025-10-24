@@ -780,25 +780,21 @@ impl JvmThread {
 
         let current_class = self.current_class()?;
 
-        let heap_item = self.heap_get(object_ref.heap_id()?)?.clone();
-        if heap_item.is_array() {
-            bail!("TOOD: instanceof for arrays")
-        }
-
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
                 let class = self.resolve_class(&identifier)?;
+                let heap_item = self.heap_get(object_ref.heap_id()?)?.clone();
                 let object_identifier = heap_item.class_identifier()?;
 
                 if class.is_interface() {
-                    let object_ref_class = self.resolve_class(object_identifier)?;
+                    let object_ref_class = self.resolve_class(&object_identifier)?;
                     if object_ref_class.implements(&identifier)? {
                         return self.stack.push_operand(operand);
                     }
                 }
 
-                if object_identifier == &identifier {
+                if object_identifier == identifier {
                     return self.stack.push_operand(operand);
                 }
 
@@ -833,7 +829,7 @@ impl JvmThread {
                     bail!("TODO: instanceof check with interface")
                 }
 
-                if object_identifier == &identifier {
+                if object_identifier == identifier {
                     return self.stack.push_operand(FrameValue::Int(1));
                 }
 
@@ -1723,9 +1719,7 @@ impl JvmThread {
     ) -> Result<ClassIdentifier> {
         match reference {
             ReferenceValue::Class(class_identifier) => Ok(class_identifier.clone()),
-            ReferenceValue::HeapItem(heap_id) => {
-                self.heap_get(heap_id)?.class_identifier().cloned()
-            }
+            ReferenceValue::HeapItem(heap_id) => self.heap_get(heap_id)?.class_identifier(),
             _ => bail!("no class identifier found for value {reference:?}"),
         }
     }
@@ -2476,9 +2470,7 @@ impl JvmThread {
 
     fn class_identifier(&self, reference: &ReferenceValue) -> Result<ClassIdentifier> {
         match reference {
-            ReferenceValue::HeapItem(heap_id) => {
-                self.heap_get(heap_id)?.class_identifier().cloned()
-            }
+            ReferenceValue::HeapItem(heap_id) => self.heap_get(heap_id)?.class_identifier(),
             ReferenceValue::Class(class_identifier) => Ok(class_identifier.clone()),
             ReferenceValue::Null => bail!("reference is null"),
         }

@@ -53,13 +53,11 @@ impl HeapItem {
         }
     }
 
-    pub fn class_identifier(&self) -> Result<&ClassIdentifier> {
+    pub fn class_identifier(&self) -> Result<ClassIdentifier> {
         Ok(match self {
-            HeapItem::Object(object) => &object.class_identifier,
-            HeapItem::ReferenceArray { class, .. } => class,
-            HeapItem::PrimitiveArray(_, _) => {
-                bail!("TODO: what is the class of a primitive array?")
-            }
+            HeapItem::Object(object) => object.class_identifier.clone(),
+            HeapItem::ReferenceArray { class, .. } => class.clone(),
+            HeapItem::PrimitiveArray(array_type, _) => array_type.class_identifier()?,
         })
     }
 
@@ -109,6 +107,19 @@ impl PrimitiveArrayType {
             Self::Short => PrimitiveArrayValue::Short(0),
             Self::Int => PrimitiveArrayValue::Int(0),
             Self::Long => PrimitiveArrayValue::Long(0),
+        }
+    }
+
+    pub fn class_identifier(&self) -> Result<ClassIdentifier> {
+        match self {
+            PrimitiveArrayType::Boolean => ClassIdentifier::new("java.lang.Boolean"),
+            PrimitiveArrayType::Char => ClassIdentifier::new("java.lang.Character"),
+            PrimitiveArrayType::Float => ClassIdentifier::new("java.lang.Float"),
+            PrimitiveArrayType::Double => ClassIdentifier::new("java.lang.Double"),
+            PrimitiveArrayType::Byte => ClassIdentifier::new("java.lang.Byte"),
+            PrimitiveArrayType::Short => ClassIdentifier::new("java.lang.Short"),
+            PrimitiveArrayType::Int => ClassIdentifier::new("java.lang.Integer"),
+            PrimitiveArrayType::Long => ClassIdentifier::new("java.lang.Long"),
         }
     }
 }
