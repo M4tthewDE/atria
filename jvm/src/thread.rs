@@ -648,6 +648,7 @@ impl JvmThread {
                 Instruction::MonitorEnter => self.monitor_enter()?,
                 Instruction::MonitorExit => self.monitor_exit()?,
                 Instruction::Irem => self.irem()?,
+                Instruction::Idiv => self.idiv()?,
                 Instruction::Ineg => self.ineg()?,
                 Instruction::TableSwitch {
                     default,
@@ -706,6 +707,13 @@ impl JvmThread {
     fn ineg(&mut self) -> Result<()> {
         let value = self.stack.pop_operand()?.int()?;
         self.stack.push_operand(FrameValue::Int(-value))
+    }
+
+    fn idiv(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.int()?;
+        let value1 = self.stack.pop_operand()?.int()?;
+
+        self.stack.push_operand(FrameValue::Int(value1 / value2))
     }
 
     fn irem(&mut self) -> Result<()> {
@@ -2199,6 +2207,24 @@ impl JvmThread {
                         .context("no long to convert to double")?
                         .long()?;
                     Ok(Some(FrameValue::Double(long as f64)))
+                }
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "jdk.internal.util.SystemProps$Raw" => match name {
+                "platformProperties" => {
+                    let string_class = ClassIdentifier::new("java.lang.String")?;
+                    self.initialize(&string_class)?;
+                    let array = self.allocate_array(string_class, 39)?;
+                    Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
+                }
+                "vmProperties" => {
+                    let string_class = ClassIdentifier::new("java.lang.String")?;
+                    self.initialize(&string_class)?;
+                    let array = self.allocate_array(string_class, 0)?;
+                    Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
                 }
                 _ => bail!(
                     "native method {name} on {} not implemented",

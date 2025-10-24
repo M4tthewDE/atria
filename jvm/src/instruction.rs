@@ -136,6 +136,7 @@ pub enum Instruction {
     Lload3,
     Lmul,
     Fmul,
+    Idiv,
     Ladd,
     Imul,
     InvokeInterface(CpIndex, u8),
@@ -233,6 +234,7 @@ impl Instruction {
             0x68 => Instruction::Imul,
             0x69 => Instruction::Lmul,
             0x6a => Instruction::Fmul,
+            0x6c => Instruction::Idiv,
             0x6e => Instruction::Fdiv,
             0x70 => Instruction::Irem,
             0x74 => Instruction::Ineg,
@@ -437,6 +439,7 @@ impl Instruction {
             Self::TableSwitch {
                 skip, jump_offsets, ..
             } => skip + 12 + jump_offsets.len() * 4,
+            Self::Idiv => 1,
         }
     }
 }
@@ -457,11 +460,6 @@ fn table_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
         jump_offsets.push(offset);
         bytes = &bytes[4..];
     }
-
-    tracing::warn!("default: {default}");
-    tracing::warn!("low: {low}");
-    tracing::warn!("high: {high}");
-    tracing::warn!("offsets: {jump_offsets:?}");
 
     // FIXME: is skip needed here?
     Ok(Instruction::TableSwitch {
