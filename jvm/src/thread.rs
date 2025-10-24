@@ -561,6 +561,7 @@ impl JvmThread {
                 }
                 Instruction::Istore(index) => self.istore(index)?,
                 Instruction::Isub => self.isub()?,
+                Instruction::Lsub => self.lsub()?,
                 Instruction::Iand => self.iand()?,
                 Instruction::Land => self.land()?,
                 Instruction::Ifeq(offset) => self.if_eq(offset)?,
@@ -1150,6 +1151,13 @@ impl JvmThread {
         let value1 = self.stack.pop_operand()?.int()?;
 
         self.stack.push_operand(FrameValue::Int(value1 - value2))
+    }
+
+    fn lsub(&mut self) -> Result<()> {
+        let value2 = self.stack.pop_operand()?.long()?;
+        let value1 = self.stack.pop_operand()?.long()?;
+
+        self.stack.push_operand(FrameValue::Long(value1 - value2))
     }
 
     fn bastore(&mut self) -> Result<()> {
