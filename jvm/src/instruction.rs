@@ -158,6 +158,11 @@ pub enum Instruction {
         high: i32,
         jump_offsets: Vec<i32>,
     },
+    LookupSwitch {
+        skip: usize,
+        default: i32,
+        offset_pairs: Vec<(i32, i32)>,
+    },
 }
 
 impl Instruction {
@@ -282,7 +287,8 @@ impl Instruction {
             0xa5 => Instruction::IfAcmpeq(offset(bytes)?),
             0xa6 => Instruction::IfAcmpne(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
-            0xaa => table_switch(bytes, pc)?,
+            0xaa => table_switch(&bytes[1..], pc + 1)?,
+            0xab => lookup_switch(&bytes[1..], pc + 1)?,
             0xac => Instruction::Ireturn,
             0xad => Instruction::Lreturn,
             0xaf => Instruction::Dreturn,
@@ -449,13 +455,16 @@ impl Instruction {
             } => skip + 12 + jump_offsets.len() * 4,
             Self::Idiv => 1,
             Self::IfAcmpeq(_) => 3,
+            Self::LookupSwitch {
+                skip, offset_pairs, ..
+            } => skip + 4 + offset_pairs.len() * 8,
         }
     }
 }
 
 fn table_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
-    let skip = 4 - pc;
-    let bytes = &bytes[4 - pc..];
+    let skip = pc % 4;
+    let bytes = &bytes[4 - skip..];
     let default = i32::from_be_bytes(bytes[..4].try_into()?);
     let bytes = &bytes[4..];
     let low = i32::from_be_bytes(bytes[..4].try_into()?);
@@ -477,5 +486,30 @@ fn table_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
         low,
         high,
         jump_offsets,
+    })
+}
+
+fn lookup_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
+    let skip = pc % 4;
+    let bytes = &bytes[4 - skip..];
+    let default = i32::from_be_bytes(bytes[..4].try_into()?);
+    let bytes = &bytes[4..];
+    let n_pairs = i32::from_be_bytes(bytes[..4].try_into()?);
+
+    let mut bytes = &bytes[4..];
+    let mut offset_pairs = Vec::new();
+    for _ in 0..n_pairs {
+        let index = i32::from_be_bytes(bytes[..4].try_into()?);
+        bytes = &bytes[4..];
+        let offset = i32::from_be_bytes(bytes[..4].try_into()?);
+        offset_pairs.push((index, offset));
+        bytes = &bytes[4..];
+    }
+
+    // FIXME: is skip needed here?
+    Ok(Instruction::LookupSwitch {
+        skip,
+        default,
+        offset_pairs,
     })
 }

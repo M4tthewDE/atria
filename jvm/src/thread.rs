@@ -660,6 +660,11 @@ impl JvmThread {
                     ref jump_offsets,
                     ..
                 } => self.table_switch(default, low, high, jump_offsets)?,
+                Instruction::LookupSwitch {
+                    default,
+                    ref offset_pairs,
+                    ..
+                } => self.lookup_switch(default, &offset_pairs)?,
             }
 
             // TODO: this is very brittle
@@ -681,11 +686,24 @@ impl JvmThread {
                 | Instruction::IfAcmpne(_)
                 | Instruction::Goto(_) => {}
                 Instruction::TableSwitch { .. } => {}
+                Instruction::LookupSwitch { .. } => {}
                 _ => self.stack.offset_pc(instruction.length() as i32)?,
             }
         }
 
         Ok(())
+    }
+
+    fn lookup_switch(&mut self, default: i32, offset_pairs: &[(i32, i32)]) -> Result<()> {
+        let key = self.stack.pop_operand()?.int()?;
+
+        for (index, offset) in offset_pairs {
+            if *index == key {
+                return self.stack.offset_pc(*offset);
+            }
+        }
+
+        self.stack.offset_pc(default)
     }
 
     fn table_switch(
