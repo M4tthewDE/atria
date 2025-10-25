@@ -2059,6 +2059,7 @@ impl JvmThread {
             },
             "jdk.internal.misc.Unsafe" => match name {
                 "registerNatives" => Ok(None),
+                "storeFence" => Ok(None),
                 "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
                 "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
                 "objectFieldOffset1" => Ok(Some(FrameValue::Long(0))),
