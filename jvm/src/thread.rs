@@ -2125,6 +2125,35 @@ impl JvmThread {
                     let value = hasher.finish();
                     Ok(Some(FrameValue::Int(value as i32)))
                 }
+                "arraycopy" => {
+                    let src = operands
+                        .first()
+                        .context("no src operand")?
+                        .reference()?
+                        .heap_id()?;
+                    let src_pos = operands.get(1).context("no src_pos operand")?.int()?;
+                    let dest = operands
+                        .get(2)
+                        .context("no dest operand")?
+                        .reference()?
+                        .heap_id()?;
+                    let mut dest_pos = operands.get(3).context("no dest_pos operand")?.int()?;
+                    let length = operands.get(4).context("no length operand")?.int()?;
+
+                    if let Ok((_, src_arr)) = self.get_primitive_array(src) {
+                        for i in src_pos..src_pos + length {
+                            let val = src_arr
+                                .get(i as usize)
+                                .context("TODO: throw IndexOutOfBoundsException")?;
+                            self.store_into_primitive_array(dest, dest_pos as usize, val.clone())?;
+                            dest_pos += 1;
+                        }
+
+                        return Ok(None);
+                    }
+
+                    bail!("arraycopy for reference array");
+                }
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
