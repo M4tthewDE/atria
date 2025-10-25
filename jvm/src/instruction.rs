@@ -118,6 +118,7 @@ pub enum Instruction {
     IfIcmpgt(i16),
     IfIcmple(i16),
     IfAcmpne(i16),
+    IfAcmpeq(i16),
     Instanceof(CpIndex),
     Checkcast(CpIndex),
     Lstore0,
@@ -278,6 +279,7 @@ impl Instruction {
             0xa2 => Instruction::IfIcmpge(offset(bytes)?),
             0xa3 => Instruction::IfIcmpgt(offset(bytes)?),
             0xa4 => Instruction::IfIcmple(offset(bytes)?),
+            0xa5 => Instruction::IfAcmpeq(offset(bytes)?),
             0xa6 => Instruction::IfAcmpne(offset(bytes)?),
             0xa7 => Instruction::Goto(offset(bytes)?),
             0xaa => table_switch(bytes, pc)?,
@@ -446,6 +448,7 @@ impl Instruction {
                 skip, jump_offsets, ..
             } => skip + 12 + jump_offsets.len() * 4,
             Self::Idiv => 1,
+            Self::IfAcmpeq(_) => 3,
         }
     }
 }

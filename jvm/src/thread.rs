@@ -620,6 +620,7 @@ impl JvmThread {
                 Instruction::IfIcmpgt(offset) => self.if_icmpgt(offset)?,
                 Instruction::IfIcmple(offset) => self.if_icmple(offset)?,
                 Instruction::IfAcmpne(offset) => self.if_acmpne(offset)?,
+                Instruction::IfAcmpeq(offset) => self.if_acmpeq(offset)?,
                 Instruction::Instanceof(ref index) => self.instance_of(index)?,
                 Instruction::Checkcast(ref index) => self.check_cast(index)?,
                 Instruction::Lstore0 => self.lstore(0)?,
@@ -1357,6 +1358,17 @@ impl JvmThread {
         }
     }
 
+    fn if_acmpeq(&mut self, offset: i16) -> Result<()> {
+        let operand2 = self.stack.pop_operand()?;
+        let operand1 = self.stack.pop_operand()?;
+
+        if operand1.reference()? == operand2.reference()? {
+            self.stack.offset_pc(offset as i32)
+        } else {
+            self.stack.offset_pc(3)
+        }
+    }
+
     fn if_icmpeq(&mut self, offset: i16) -> Result<()> {
         let value2 = self.stack.pop_operand()?.int()?;
         let value1 = self.stack.pop_operand()?.int()?;
@@ -2039,6 +2051,7 @@ impl JvmThread {
                     let cpus = std::thread::available_parallelism()?;
                     Ok(Some(FrameValue::Int(cpus.get().try_into()?)))
                 }
+                "maxMemory" => Ok(Some(FrameValue::Long(8192 * 1024 * 1024 * 1024))),
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
@@ -2166,6 +2179,13 @@ impl JvmThread {
                 // TODO: provide a proper seed
                 "getRandomSeedForDumping" => Ok(Some(FrameValue::Long(0))),
                 "initializeFromArchive" => Ok(None),
+                _ => bail!(
+                    "native method {name} on {} not implemented",
+                    class.identifier()
+                ),
+            },
+            "jdk.internal.misc.VM" => match name {
+                "initialize" => Ok(None),
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
