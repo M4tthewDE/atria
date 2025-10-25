@@ -1601,12 +1601,11 @@ impl JvmThread {
         let operands = self
             .stack
             .pop_operands(method_descriptor.parameters.len() + 1)?;
-
-        let reference = operands.first().context("no first operand")?.reference()?;
-        let heap_id = reference.heap_id()?;
-        let class_identifier = self.class_identifier_from_reference(reference)?;
+        let objectref = operands.first().context("no first operand")?.reference()?;
+        let heap_id = objectref.heap_id()?;
+        let class_identifier = self.class_identifier_from_reference(objectref)?;
         let class = self.class(&class_identifier)?;
-        let method = class.method(&name, &descriptor)?;
+        let (class, method) = self.select_method(&class, &method, &name, &method_descriptor)?;
         let code = method
             .code()
             .context(format!("no code found for {name} method"))?;
@@ -1615,7 +1614,7 @@ impl JvmThread {
             method_descriptor,
             operands.clone(),
             Code::new(code.clone())?,
-            class_identifier,
+            class.identifier().clone(),
             Some(heap_id.clone()),
         );
         self.execute()
@@ -1733,6 +1732,7 @@ impl JvmThread {
         }
     }
 
+    // TODO: is this the same as self.class_identifier() ?
     fn class_identifier_from_reference(
         &self,
         reference: &ReferenceValue,
