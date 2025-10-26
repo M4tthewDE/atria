@@ -16,7 +16,8 @@ use crate::{ClassIdentifier, ReferenceValue, heap::HeapId};
 #[derive(Clone)]
 pub struct Class {
     identifier: ClassIdentifier,
-    fields: HashMap<String, FieldValue>,
+    static_fields: HashMap<String, FieldValue>,
+    class_fields: HashMap<String, FieldValue>,
     class_file: ClassFile,
     initialized: bool,
     being_initialized: bool,
@@ -27,15 +28,15 @@ impl Class {
         Self {
             identifier,
             class_file,
-            fields: HashMap::default(),
+            static_fields: HashMap::default(),
+            class_fields: HashMap::default(),
             initialized: false,
             being_initialized: false,
         }
     }
 
-    // TODO: rename to default
     pub fn set_class_field(&mut self, name: String, descriptor: &str) -> Result<()> {
-        self.fields
+        self.class_fields
             .insert(name, FieldDescriptor::new(descriptor)?.into());
         Ok(())
     }
@@ -118,12 +119,19 @@ impl Class {
 
     pub fn set_static_field(&mut self, name: &str, value: FieldValue) -> Result<()> {
         trace!("setting field {name} to value {value:?}");
-        self.fields.insert(name.to_string(), value);
+        self.static_fields.insert(name.to_string(), value);
         Ok(())
     }
 
+    pub fn get_class_field_value(&self, name: &str) -> Result<FieldValue> {
+        self.class_fields
+            .get(name)
+            .context(format!("field {name} not found in {:?}", self.identifier))
+            .cloned()
+    }
+
     pub fn get_static_field_value(&self, name: &str) -> Result<FieldValue> {
-        self.fields
+        self.static_fields
             .get(name)
             .context(format!("field {name} not found in {:?}", self.identifier))
             .cloned()
@@ -200,6 +208,13 @@ impl FieldValue {
         match self {
             Self::Long(val) => Ok(*val),
             _ => bail!("no long found"),
+        }
+    }
+
+    pub fn int(&self) -> Result<i32> {
+        match self {
+            Self::Integer(val) => Ok(*val),
+            _ => bail!("no int found"),
         }
     }
 }

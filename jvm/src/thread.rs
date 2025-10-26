@@ -15,7 +15,7 @@ use parser::class::{
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::code::Code;
-use crate::heap::{Heap, HeapId, HeapItem, PrimitiveArrayType, PrimitiveArrayValue};
+use crate::heap::{Heap, HeapId, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
 use crate::{ClassIdentifier, ReferenceValue};
 use crate::{
@@ -243,7 +243,7 @@ impl JvmThread {
     pub fn allocate(
         &mut self,
         class_identifier: ClassIdentifier,
-        fields: HashMap<String, FieldValue>,
+        fields: HashMap<String, InstanceField>,
     ) -> Result<HeapId> {
         let mut heap = self
             .heap
@@ -664,7 +664,7 @@ impl JvmThread {
                     default,
                     ref offset_pairs,
                     ..
-                } => self.lookup_switch(default, &offset_pairs)?,
+                } => self.lookup_switch(default, offset_pairs)?,
             }
 
             // TODO: this is very brittle
@@ -1740,7 +1740,7 @@ impl JvmThread {
         if class_identifier == ClassIdentifier::new("java.lang.Class")? {
             let identifier = self.class_identifier_from_reference(object_ref.reference()?)?;
             let class = self.class(&identifier)?;
-            let field_value = class.get_static_field_value(&name)?;
+            let field_value = class.get_class_field_value(&name)?;
             self.stack.push_operand(field_value.into())
         } else {
             let heap_id = object_ref.reference()?.heap_id()?;
@@ -1810,7 +1810,7 @@ impl JvmThread {
         let current_class = self.current_class()?;
         let class_identifier = current_class.class_identifier(index)?;
         let class = self.resolve_class(&class_identifier)?;
-        let fields = self.default_instance_fields(&class)?;
+        let fields = self.default_instance_fields(&class, 0)?;
         let object_id = self.allocate(class.identifier().clone(), fields)?;
         self.stack
             .push_operand(FrameValue::Reference(ReferenceValue::HeapItem(object_id)))
@@ -2080,7 +2080,51 @@ impl JvmThread {
                 "storeFence" => Ok(None),
                 "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
                 "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
-                "objectFieldOffset1" => Ok(Some(FrameValue::Long(0))),
+                "objectFieldOffset1" => {
+                    let class = operands.get(1).context("no class operand found")?;
+                    let name = operands.get(2).context("no String operand found")?;
+                    let byte_value = self.heap_get_field(name.reference()?.heap_id()?, "value")?;
+                    let (_, primitive_array) = self.get_primitive_array(byte_value.heap_id()?)?;
+                    let bytes: Vec<u8> = primitive_array
+                        .iter()
+                        .map(|p| p.byte())
+                        .collect::<Result<Vec<u8>>>()?;
+                    let name = String::from_utf8(bytes)?;
+                    let class = self.class(class.reference()?.class_identifier()?)?;
+                    let offset = self
+                        .default_instance_fields(&class, 0)?
+                        .get(&name)
+                        .context(format!("no field '{name}' found"))?
+                        .offset();
+                    Ok(Some(FrameValue::Long(offset)))
+                }
+                "compareAndSetInt" => {
+                    let object = operands.get(1).context("no 'object' operand found")?;
+                    let offset = operands
+                        .get(2)
+                        .context("no 'offset' operand found")?
+                        .long()?;
+                    let expected = operands
+                        .get(3)
+                        .context("no 'expected' operand found")?
+                        .int()?;
+                    let x = operands.get(4).context("no 'x' operand found")?.int()?;
+                    let heap_id = object.reference()?.heap_id()?;
+
+                    let object = self.heap_get(heap_id)?;
+
+                    let class = self.class(&object.class_identifier()?)?;
+                    for (name, field) in self.default_instance_fields(&class, 0)? {
+                        if field.offset() == offset
+                            && self.heap_get_field(heap_id, &name)?.int()? == expected
+                        {
+                            self.heap_set_field(heap_id, &name, FieldValue::Integer(x))?;
+                            return Ok(Some(FrameValue::Int(1)));
+                        }
+                    }
+
+                    bail!("no field with offset '{offset}' found");
+                }
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
@@ -2343,7 +2387,7 @@ impl JvmThread {
         let string_identifier = ClassIdentifier::new("java.lang.String")?;
         let class = self.resolve_class(&string_identifier)?;
 
-        let fields = self.default_instance_fields(&class)?;
+        let fields = self.default_instance_fields(&class, 0)?;
         let object_id = self.allocate(class.identifier().clone(), fields)?;
         let bytes = value
             .into_bytes()
@@ -2362,7 +2406,7 @@ impl JvmThread {
         let thread_identifier = ClassIdentifier::new("java.lang.Thread")?;
         let class = self.resolve_class(&thread_identifier)?;
 
-        let fields = self.default_instance_fields(&class)?;
+        let fields = self.default_instance_fields(&class, 0)?;
         let object_id = self.allocate(class.identifier().clone(), fields)?;
         self.heap_set_field(
             &object_id,
@@ -2397,7 +2441,7 @@ impl JvmThread {
         let thread_identifier = ClassIdentifier::new("java.lang.ThreadGroup")?;
         let class = self.resolve_class(&thread_identifier)?;
 
-        let fields = self.default_instance_fields(&class)?;
+        let fields = self.default_instance_fields(&class, 0)?;
         let object_id = self.allocate(class.identifier().clone(), fields)?;
         self.heap_set_field(
             &object_id,
@@ -2408,7 +2452,11 @@ impl JvmThread {
         Ok(object_id)
     }
 
-    fn default_instance_fields(&mut self, class: &Class) -> Result<HashMap<String, FieldValue>> {
+    fn default_instance_fields(
+        &mut self,
+        class: &Class,
+        mut offset: i64,
+    ) -> Result<HashMap<String, InstanceField>> {
         let mut fields = HashMap::new();
         for field in class.fields() {
             if field.is_static() {
@@ -2419,13 +2467,14 @@ impl JvmThread {
             let descriptor = class.utf8(&field.descriptor_index)?;
             fields.insert(
                 field_name.to_string(),
-                FieldDescriptor::new(descriptor)?.into(),
+                InstanceField::new(offset, FieldDescriptor::new(descriptor)?.into()),
             );
+            offset += 1;
         }
 
         if class.has_super_class() {
             let super_class = self.initialize(&class.super_class()?)?;
-            let super_class_fields = self.default_instance_fields(&super_class)?;
+            let super_class_fields = self.default_instance_fields(&super_class, offset)?;
             fields.extend(super_class_fields);
         }
 

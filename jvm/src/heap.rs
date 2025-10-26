@@ -16,13 +16,29 @@ impl From<u64> for HeapId {
 }
 
 #[derive(Debug, Clone)]
+pub struct InstanceField {
+    offset: i64,
+    value: FieldValue,
+}
+
+impl InstanceField {
+    pub fn new(offset: i64, value: FieldValue) -> Self {
+        Self { offset, value }
+    }
+
+    pub fn offset(&self) -> i64 {
+        self.offset
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Object {
     class_identifier: ClassIdentifier,
-    fields: HashMap<String, FieldValue>,
+    fields: HashMap<String, InstanceField>,
 }
 
 impl Object {
-    fn new(class_identifier: ClassIdentifier, fields: HashMap<String, FieldValue>) -> Self {
+    fn new(class_identifier: ClassIdentifier, fields: HashMap<String, InstanceField>) -> Self {
         Self {
             class_identifier,
             fields,
@@ -156,7 +172,7 @@ impl Heap {
     pub fn allocate(
         &mut self,
         class_identifier: ClassIdentifier,
-        fields: HashMap<String, FieldValue>,
+        fields: HashMap<String, InstanceField>,
     ) -> HeapId {
         let object = Object::new(class_identifier, fields);
         let heap_item = HeapItem::Object(object);
@@ -212,10 +228,11 @@ impl Heap {
             .get_mut(object_id)
             .context(format!("unknown object with {object_id:?}"))?;
         if let HeapItem::Object(object) = item {
-            object
+            let field = object
                 .fields
-                .insert(name.to_string(), value)
-                .context(format!("field '{name}' not found on object {object:?}"))?;
+                .get_mut(name)
+                .context(format!("field '{name}' not found on object"))?;
+            field.value = value;
             Ok(())
         } else {
             Ok(())
@@ -233,7 +250,7 @@ impl Heap {
                 .fields
                 .get(name)
                 .context("no field with name '{name}' found")
-                .cloned(),
+                .map(|f| f.value.clone()),
             _ => bail!("item at {id:?} is no object, but {item:?}"),
         }
     }
