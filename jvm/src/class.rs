@@ -217,6 +217,13 @@ impl FieldValue {
             _ => bail!("no int found"),
         }
     }
+
+    pub fn reference(&self) -> Result<ReferenceValue> {
+        match self {
+            Self::Reference(val) => Ok(val.clone()),
+            _ => bail!("no reference found"),
+        }
+    }
 }
 
 impl From<FieldDescriptor> for FieldValue {

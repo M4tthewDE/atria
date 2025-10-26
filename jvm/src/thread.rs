@@ -2125,6 +2125,41 @@ impl JvmThread {
 
                     bail!("no field with offset '{offset}' found");
                 }
+                "compareAndSetReference" => {
+                    let object = operands.get(1).context("no 'object' operand found")?;
+                    let offset = operands
+                        .get(2)
+                        .context("no 'offset' operand found")?
+                        .long()?;
+                    let expected = operands
+                        .get(3)
+                        .context("no 'expected' operand found")?
+                        .reference()?;
+                    let x = operands
+                        .get(4)
+                        .context("no 'x' operand found")?
+                        .reference()?;
+                    let heap_id = object.reference()?.heap_id()?;
+
+                    let object = self.heap_get(heap_id)?;
+
+                    if object.is_array() {
+                        self.store_into_reference_array(heap_id, offset as usize, x.clone())?;
+                        return Ok(Some(FrameValue::Int(1)));
+                    }
+
+                    let class = self.class(&object.class_identifier()?)?;
+                    for (name, field) in self.default_instance_fields(&class, 0)? {
+                        if field.offset() == offset
+                            && self.heap_get_field(heap_id, &name)?.reference()? == *expected
+                        {
+                            self.heap_set_field(heap_id, &name, FieldValue::Reference(x.clone()))?;
+                            return Ok(Some(FrameValue::Int(1)));
+                        }
+                    }
+
+                    bail!("no field with offset '{offset}' found");
+                }
                 "getReferenceVolatile" => {
                     let object = operands.get(1).context("no 'object' operand found")?;
                     let offset = operands
