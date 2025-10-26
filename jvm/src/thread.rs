@@ -2125,6 +2125,31 @@ impl JvmThread {
 
                     bail!("no field with offset '{offset}' found");
                 }
+                "getReferenceVolatile" => {
+                    let object = operands.get(1).context("no 'object' operand found")?;
+                    let offset = operands
+                        .get(2)
+                        .context("no 'offset' operand found")?
+                        .long()?;
+                    let heap_id = object.reference()?.heap_id()?;
+                    let object = self.heap_get(heap_id)?;
+
+                    if let HeapItem::ReferenceArray { values, .. } = object {
+                        let value = values.get(offset as usize).context("no value at offset")?;
+                        return Ok(Some(FrameValue::Reference(value.clone())));
+                    }
+
+                    let class = self.class(&object.class_identifier()?)?;
+
+                    for (name, field) in self.default_instance_fields(&class, 0)? {
+                        if field.offset() == offset {
+                            let field_value = self.heap_get_field(heap_id, &name)?;
+                            return Ok(Some(field_value.into()));
+                        }
+                    }
+
+                    bail!("no field with offset '{offset}' found");
+                }
                 _ => bail!(
                     "native method {name} on {} not implemented",
                     class.identifier()
