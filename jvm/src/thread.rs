@@ -2125,6 +2125,33 @@ impl JvmThread {
 
                     bail!("no field with offset '{offset}' found");
                 }
+                "compareAndSetLong" => {
+                    let object = operands.get(1).context("no 'object' operand found")?;
+                    let offset = operands
+                        .get(2)
+                        .context("no 'offset' operand found")?
+                        .long()?;
+                    let expected = operands
+                        .get(3)
+                        .context("no 'expected' operand found")?
+                        .long()?;
+                    let x = operands.get(4).context("no 'x' operand found")?.long()?;
+                    let heap_id = object.reference()?.heap_id()?;
+
+                    let object = self.heap_get(heap_id)?;
+
+                    let class = self.class(&object.class_identifier()?)?;
+                    for (name, field) in self.default_instance_fields(&class, 0)? {
+                        if field.offset() == offset
+                            && self.heap_get_field(heap_id, &name)?.long()? == expected
+                        {
+                            self.heap_set_field(heap_id, &name, FieldValue::Long(x))?;
+                            return Ok(Some(FrameValue::Int(1)));
+                        }
+                    }
+
+                    bail!("no field with offset '{offset}' found");
+                }
                 "compareAndSetReference" => {
                     let object = operands.get(1).context("no 'object' operand found")?;
                     let offset = operands
