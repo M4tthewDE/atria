@@ -26,6 +26,7 @@ pub mod jar;
 pub mod jdk;
 pub mod loader;
 mod monitor;
+mod native;
 pub mod stack;
 pub mod thread;
 

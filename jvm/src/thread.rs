@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -17,7 +16,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::code::Code;
 use crate::heap::{Heap, HeapId, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
-use crate::{ClassIdentifier, ReferenceValue};
+use crate::{ClassIdentifier, ReferenceValue, native};
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,
@@ -36,14 +35,14 @@ impl From<i64> for ThreadId {
 
 pub struct JvmThread {
     name: String,
-    class_loader: Arc<Mutex<BootstrapClassLoader>>,
-    classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
-    heap: Arc<Mutex<Heap>>,
-    monitors: Arc<Mutex<Monitors>>,
+    pub class_loader: Arc<Mutex<BootstrapClassLoader>>,
+    pub classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
+    pub heap: Arc<Mutex<Heap>>,
+    pub monitors: Arc<Mutex<Monitors>>,
 
-    stack: Stack,
-    creation_time: Instant,
-    current_thread_object: Option<HeapId>,
+    pub stack: Stack,
+    pub creation_time: Instant,
+    pub current_thread_object: Option<HeapId>,
     current_thread_id: Option<ThreadId>,
 }
 
@@ -141,7 +140,7 @@ impl JvmThread {
         Ok(classes.get(identifier).cloned())
     }
 
-    fn class(&self, identifier: &ClassIdentifier) -> Result<Class> {
+    pub fn class(&self, identifier: &ClassIdentifier) -> Result<Class> {
         let classes = self
             .classes
             .lock()
@@ -166,7 +165,7 @@ impl JvmThread {
         self.class(&current_class)
     }
 
-    fn heap_get(&self, heap_id: &HeapId) -> Result<HeapItem> {
+    pub fn heap_get(&self, heap_id: &HeapId) -> Result<HeapItem> {
         let heap = self
             .heap
             .lock()
@@ -342,7 +341,7 @@ impl JvmThread {
         monitors.exit_class_monitor(class_identifier, thread_id)
     }
 
-    fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
+    pub fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
         if let Some(c) = self.maybe_class(identifier)?
             && (c.initialized() || c.being_initialized())
         {
@@ -1578,7 +1577,9 @@ impl JvmThread {
                 heap_id.cloned(),
             );
             self.execute()
-        } else if let Some(return_value) = self.run_native_method(&class, &method_name, operands)? {
+        } else if let Some(return_value) =
+            native::run(self, class.identifier(), &method_name, operands)?
+        {
             self.stack.push_operand(return_value)
         } else {
             Ok(())
@@ -1666,7 +1667,7 @@ impl JvmThread {
 
         let operands = self.stack.pop_operands(descriptor.parameters.len())?;
         if method.is_native() {
-            if let Some(return_value) = self.run_native_method(&class, &name, operands)? {
+            if let Some(return_value) = native::run(self, class.identifier(), &name, operands)? {
                 self.stack.push_operand(return_value)
             } else {
                 Ok(())
@@ -1944,533 +1945,7 @@ impl JvmThread {
         name == "<init>" && descriptor.is_void()
     }
 
-    fn run_native_method(
-        &mut self,
-        class: &Class,
-        name: &str,
-        operands: Vec<FrameValue>,
-    ) -> Result<Option<FrameValue>> {
-        info!(
-            "running native method '{name}' in {:?} with operands {:?}",
-            class.identifier(),
-            operands
-        );
-
-        match format!("{:?}", class.identifier()).as_str() {
-            "java.lang.Class" => match name {
-                "registerNatives" => Ok(None),
-                "initClassName" => {
-                    if let FrameValue::Reference(ReferenceValue::Class(identifier)) =
-                        operands.first().context("no operands provided")?
-                    {
-                        let object_id = self.new_string(format!("{identifier:?}").to_string())?;
-                        Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
-                            object_id,
-                        ))))
-                    } else {
-                        bail!("first operand has to be a reference")
-                    }
-                }
-                "desiredAssertionStatus0" => Ok(Some(FrameValue::Int(0))),
-                "getPrimitiveClass" => {
-                    let operand = operands.first().context("operands are empty")?;
-                    let heap_id =
-                        if let FrameValue::Reference(ReferenceValue::HeapItem(heap_id)) = operand {
-                            heap_id
-                        } else {
-                            bail!("no reference found, instead: {operand:?}")
-                        };
-
-                    let value_heap_item = self.heap_get_field(heap_id, "value")?;
-                    let (_, primitive_array) =
-                        self.get_primitive_array(value_heap_item.heap_id()?)?;
-
-                    let bytes: Vec<u8> = primitive_array
-                        .iter()
-                        .map(|p| p.byte())
-                        .collect::<Result<Vec<u8>>>()?;
-                    let name = String::from_utf8(bytes)?;
-                    match name.as_str() {
-                        "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Integer")?,
-                        )))),
-                        "boolean" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Boolean")?,
-                        )))),
-                        "byte" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Byte")?,
-                        )))),
-                        "short" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Short")?,
-                        )))),
-                        "char" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Character")?,
-                        )))),
-                        "double" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Double")?,
-                        )))),
-                        "long" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Long")?,
-                        )))),
-                        "float" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                            ClassIdentifier::new("java.lang.Float")?,
-                        )))),
-                        _ => bail!("invalid primitive class name: '{name}'"),
-                    }
-                }
-                "forName0" => {
-                    let heap_id = operands
-                        .first()
-                        .context("no first operand")?
-                        .reference()?
-                        .heap_id()?;
-                    let byte_value = self.heap_get_field(heap_id, "value")?;
-                    let (_, primitive_array) = self.get_primitive_array(byte_value.heap_id()?)?;
-                    let bytes: Vec<u8> = primitive_array
-                        .iter()
-                        .map(|p| p.byte())
-                        .collect::<Result<Vec<u8>>>()?;
-                    let name = String::from_utf8(bytes)?;
-                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                        ClassIdentifier::new(&name)?,
-                    ))))
-                }
-                "isPrimitive" => {
-                    let value = match format!(
-                        "{:?}",
-                        operands
-                            .first()
-                            .context("no first operand")?
-                            .reference()?
-                            .class_identifier()?
-                    )
-                    .as_str()
-                    {
-                        "java.lang.Byte" => FrameValue::Int(1),
-                        "java.lang.Character" => FrameValue::Int(1),
-                        "java.lang.Double" => FrameValue::Int(1),
-                        "java.lang.Float" => FrameValue::Int(1),
-                        "java.lang.Integer" => FrameValue::Int(1),
-                        "java.lang.Long" => FrameValue::Int(1),
-                        "java.lang.Short" => FrameValue::Int(1),
-                        "java.lang.Boolean" => FrameValue::Int(1),
-                        "java.lang.Void" => FrameValue::Int(1),
-                        _ => FrameValue::Int(0),
-                    };
-                    Ok(Some(value))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.Runtime" => match name {
-                "availableProcessors" => {
-                    let cpus = std::thread::available_parallelism()?;
-                    Ok(Some(FrameValue::Int(cpus.get().try_into()?)))
-                }
-                "maxMemory" => Ok(Some(FrameValue::Long(8192 * 1024 * 1024 * 1024))),
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "jdk.internal.misc.Unsafe" => match name {
-                "registerNatives" => Ok(None),
-                "storeFence" => Ok(None),
-                "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
-                "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
-                "objectFieldOffset1" => {
-                    let class = operands.get(1).context("no class operand found")?;
-                    let name = operands.get(2).context("no String operand found")?;
-                    let byte_value = self.heap_get_field(name.reference()?.heap_id()?, "value")?;
-                    let (_, primitive_array) = self.get_primitive_array(byte_value.heap_id()?)?;
-                    let bytes: Vec<u8> = primitive_array
-                        .iter()
-                        .map(|p| p.byte())
-                        .collect::<Result<Vec<u8>>>()?;
-                    let name = String::from_utf8(bytes)?;
-                    let class = self.class(class.reference()?.class_identifier()?)?;
-                    let offset = self
-                        .default_instance_fields(&class, 0)?
-                        .get(&name)
-                        .context(format!("no field '{name}' found"))?
-                        .offset();
-                    Ok(Some(FrameValue::Long(offset)))
-                }
-                "compareAndSetInt" => {
-                    let object = operands.get(1).context("no 'object' operand found")?;
-                    let offset = operands
-                        .get(2)
-                        .context("no 'offset' operand found")?
-                        .long()?;
-                    let expected = operands
-                        .get(3)
-                        .context("no 'expected' operand found")?
-                        .int()?;
-                    let x = operands.get(4).context("no 'x' operand found")?.int()?;
-                    let heap_id = object.reference()?.heap_id()?;
-
-                    let object = self.heap_get(heap_id)?;
-
-                    let class = self.class(&object.class_identifier()?)?;
-                    for (name, field) in self.default_instance_fields(&class, 0)? {
-                        if field.offset() == offset
-                            && self.heap_get_field(heap_id, &name)?.int()? == expected
-                        {
-                            self.heap_set_field(heap_id, &name, FieldValue::Integer(x))?;
-                            return Ok(Some(FrameValue::Int(1)));
-                        }
-                    }
-
-                    bail!("no field with offset '{offset}' found");
-                }
-                "compareAndSetLong" => {
-                    let object = operands.get(1).context("no 'object' operand found")?;
-                    let offset = operands
-                        .get(2)
-                        .context("no 'offset' operand found")?
-                        .long()?;
-                    let expected = operands
-                        .get(3)
-                        .context("no 'expected' operand found")?
-                        .long()?;
-                    let x = operands.get(4).context("no 'x' operand found")?.long()?;
-                    let heap_id = object.reference()?.heap_id()?;
-
-                    let object = self.heap_get(heap_id)?;
-
-                    let class = self.class(&object.class_identifier()?)?;
-                    for (name, field) in self.default_instance_fields(&class, 0)? {
-                        if field.offset() == offset
-                            && self.heap_get_field(heap_id, &name)?.long()? == expected
-                        {
-                            self.heap_set_field(heap_id, &name, FieldValue::Long(x))?;
-                            return Ok(Some(FrameValue::Int(1)));
-                        }
-                    }
-
-                    bail!("no field with offset '{offset}' found");
-                }
-                "compareAndSetReference" => {
-                    let object = operands.get(1).context("no 'object' operand found")?;
-                    let offset = operands
-                        .get(2)
-                        .context("no 'offset' operand found")?
-                        .long()?;
-                    let expected = operands
-                        .get(3)
-                        .context("no 'expected' operand found")?
-                        .reference()?;
-                    let x = operands
-                        .get(4)
-                        .context("no 'x' operand found")?
-                        .reference()?;
-                    let heap_id = object.reference()?.heap_id()?;
-
-                    let object = self.heap_get(heap_id)?;
-
-                    if object.is_array() {
-                        self.store_into_reference_array(heap_id, offset as usize, x.clone())?;
-                        return Ok(Some(FrameValue::Int(1)));
-                    }
-
-                    let class = self.class(&object.class_identifier()?)?;
-                    for (name, field) in self.default_instance_fields(&class, 0)? {
-                        if field.offset() == offset
-                            && self.heap_get_field(heap_id, &name)?.reference()? == *expected
-                        {
-                            self.heap_set_field(heap_id, &name, FieldValue::Reference(x.clone()))?;
-                            return Ok(Some(FrameValue::Int(1)));
-                        }
-                    }
-
-                    bail!("no field with offset '{offset}' found");
-                }
-                "getReferenceVolatile" => {
-                    let object = operands.get(1).context("no 'object' operand found")?;
-                    let offset = operands
-                        .get(2)
-                        .context("no 'offset' operand found")?
-                        .long()?;
-                    let heap_id = object.reference()?.heap_id()?;
-                    let object = self.heap_get(heap_id)?;
-
-                    if let HeapItem::ReferenceArray { values, .. } = object {
-                        let value = values.get(offset as usize).context("no value at offset")?;
-                        return Ok(Some(FrameValue::Reference(value.clone())));
-                    }
-
-                    let class = self.class(&object.class_identifier()?)?;
-
-                    for (name, field) in self.default_instance_fields(&class, 0)? {
-                        if field.offset() == offset {
-                            let field_value = self.heap_get_field(heap_id, &name)?;
-                            return Ok(Some(field_value.into()));
-                        }
-                    }
-
-                    bail!("no field with offset '{offset}' found");
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.Thread" => match name {
-                "registerNatives" => Ok(None),
-                "currentThread" => Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
-                    self.current_thread_object
-                        .clone()
-                        .context("no current thread found")?,
-                )))),
-                "setPriority0" => {
-                    let objectref = operands.first().context("no first operand")?;
-                    let priority = operands.get(1).context("no second operand")?;
-                    let heap_id = objectref.reference()?.heap_id()?;
-                    self.heap_set_field(heap_id, "priority", priority.clone().into())?;
-                    Ok(None)
-                }
-                "start0" => {
-                    let objectref = operands
-                        .first()
-                        .context("no first operand, no thread to start")?;
-                    let heap_id = objectref.reference()?.heap_id()?;
-                    let heap_item = self.heap_get(heap_id)?;
-                    let object = heap_item.object()?;
-                    let class_identifier = object.class();
-
-                    let name = self.heap_get_field(heap_id, "name")?;
-                    let byte_value = self.heap_get_field(name.heap_id()?, "value")?;
-                    let (_, primitive_array) = self.get_primitive_array(byte_value.heap_id()?)?;
-                    let bytes: Vec<u8> = primitive_array
-                        .iter()
-                        .map(|p| p.byte())
-                        .collect::<Result<Vec<u8>>>()?;
-                    let name = String::from_utf8(bytes)?;
-
-                    let new_thread = Self::new(
-                        name.to_string(),
-                        self.class_loader.clone(),
-                        self.classes.clone(),
-                        self.heap.clone(),
-                        self.monitors.clone(),
-                    );
-
-                    Self::run_with_method(
-                        new_thread,
-                        class_identifier.clone(),
-                        "run".to_string(),
-                        "()V".to_string(),
-                    );
-
-                    Ok(None)
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.System" => match name {
-                "registerNatives" => Ok(None),
-                "nanoTime" => {
-                    let now = Instant::now();
-                    let elapsed = now.duration_since(self.creation_time).as_nanos();
-                    Ok(Some(FrameValue::Long(elapsed as i64)))
-                }
-                "identityHashCode" => {
-                    let mut hasher = DefaultHasher::new();
-                    operands
-                        .first()
-                        .context("operands are empty")?
-                        .reference()?
-                        .hash(&mut hasher);
-                    let value = hasher.finish();
-                    Ok(Some(FrameValue::Int(value as i32)))
-                }
-                "arraycopy" => {
-                    let src = operands
-                        .first()
-                        .context("no src operand")?
-                        .reference()?
-                        .heap_id()?;
-                    let src_pos = operands.get(1).context("no src_pos operand")?.int()?;
-                    let dest = operands
-                        .get(2)
-                        .context("no dest operand")?
-                        .reference()?
-                        .heap_id()?;
-                    let mut dest_pos = operands.get(3).context("no dest_pos operand")?.int()?;
-                    let length = operands.get(4).context("no length operand")?.int()?;
-
-                    if let Ok((_, src_arr)) = self.get_primitive_array(src) {
-                        for i in src_pos..src_pos + length {
-                            let val = src_arr
-                                .get(i as usize)
-                                .context("TODO: throw IndexOutOfBoundsException")?;
-                            self.store_into_primitive_array(dest, dest_pos as usize, val.clone())?;
-                            dest_pos += 1;
-                        }
-
-                        return Ok(None);
-                    }
-
-                    bail!("arraycopy for reference array");
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "jdk.internal.misc.CDS" => match name {
-                "isDumpingClassList0" => Ok(Some(FrameValue::Int(0))),
-                "isDumpingArchive0" => Ok(Some(FrameValue::Int(0))),
-                "isSharingEnabled0" => Ok(Some(FrameValue::Int(0))),
-                // TODO: provide a proper seed
-                "getRandomSeedForDumping" => Ok(Some(FrameValue::Long(0))),
-                "initializeFromArchive" => Ok(None),
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "jdk.internal.misc.VM" => match name {
-                "initialize" => Ok(None),
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "jdk.internal.reflect.Reflection" => match name {
-                "getCallerClass" => {
-                    let caller_class = self.stack.caller_class()?;
-                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                        caller_class.clone(),
-                    ))))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.Object" => match name {
-                "getClass" => {
-                    let heap_id = operands
-                        .first()
-                        .context("operands are empty")?
-                        .reference()?
-                        .heap_id()?;
-                    let heap_item = self.heap_get(heap_id)?;
-                    let class_identifier = heap_item.class_identifier()?;
-                    Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                        class_identifier.clone(),
-                    ))))
-                }
-                "hashCode" => {
-                    // TODO: this is ultra wrong, need to hash values not references
-                    let mut hasher = DefaultHasher::new();
-                    operands
-                        .first()
-                        .context("operands are empty")?
-                        .reference()?
-                        .hash(&mut hasher);
-                    let value = hasher.finish();
-                    Ok(Some(FrameValue::Int(value as i32)))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.security.AccessController" => match name {
-                // TODO: this will be used at some point
-                "getStackAccessControlContext" => {
-                    Ok(Some(FrameValue::Reference(ReferenceValue::Null)))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.ref.Reference" => match name {
-                // TODO: this will be used at some point
-                "waitForReferencePendingList" => {
-                    warn!("parking this thread, reference pending list not implemented yet");
-                    std::thread::park();
-                    Ok(None)
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.ClassLoader" => match name {
-                // TODO: this will be used at some point
-                "registerNatives" => Ok(None),
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.Float" => match name {
-                "floatToRawIntBits" => {
-                    let float = operands
-                        .first()
-                        .context("no float to convert to int")?
-                        .float()?;
-                    Ok(Some(FrameValue::Int(float as i32)))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "java.lang.Double" => match name {
-                "doubleToRawLongBits" => {
-                    let double = operands
-                        .first()
-                        .context("no double to convert to long")?
-                        .double()?;
-                    Ok(Some(FrameValue::Long(double as i64)))
-                }
-                "longBitsToDouble" => {
-                    let long = operands
-                        .first()
-                        .context("no long to convert to double")?
-                        .long()?;
-                    Ok(Some(FrameValue::Double(long as f64)))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            "jdk.internal.util.SystemProps$Raw" => match name {
-                "platformProperties" => {
-                    let string_class = ClassIdentifier::new("java.lang.String")?;
-                    self.initialize(&string_class)?;
-                    let array = self.allocate_array(string_class, 39)?;
-                    Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
-                }
-                "vmProperties" => {
-                    let string_class = ClassIdentifier::new("java.lang.String")?;
-                    self.initialize(&string_class)?;
-                    let array = self.allocate_array(string_class, 0)?;
-                    Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
-                }
-                _ => bail!(
-                    "native method {name} on {} not implemented",
-                    class.identifier()
-                ),
-            },
-            _ => bail!(
-                "native method {name} on {} not implemented",
-                class.identifier()
-            ),
-        }
-    }
-
-    fn new_string(&mut self, value: String) -> Result<HeapId> {
+    pub fn new_string(&mut self, value: String) -> Result<HeapId> {
         let string_identifier = ClassIdentifier::new("java.lang.String")?;
         let class = self.resolve_class(&string_identifier)?;
 
@@ -2539,7 +2014,7 @@ impl JvmThread {
         Ok(object_id)
     }
 
-    fn default_instance_fields(
+    pub fn default_instance_fields(
         &mut self,
         class: &Class,
         mut offset: i64,
