@@ -35,10 +35,10 @@ impl From<i64> for ThreadId {
 
 pub struct JvmThread {
     name: String,
-    pub class_loader: Arc<Mutex<BootstrapClassLoader>>,
-    pub classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
-    pub heap: Arc<Mutex<Heap>>,
-    pub monitors: Arc<Mutex<Monitors>>,
+    class_loader: Arc<Mutex<BootstrapClassLoader>>,
+    classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
+    heap: Arc<Mutex<Heap>>,
+    monitors: Arc<Mutex<Monitors>>,
 
     pub stack: Stack,
     pub creation_time: Instant,
@@ -65,6 +65,16 @@ impl JvmThread {
             current_thread_object: None,
             current_thread_id: None,
         }
+    }
+
+    pub fn new_thread(&self, name: String) -> Self {
+        Self::new(
+            name,
+            self.class_loader.clone(),
+            self.classes.clone(),
+            self.heap.clone(),
+            self.monitors.clone(),
+        )
     }
 
     pub fn run_with_class(mut thread: Self, main_class: ClassIdentifier) -> JoinHandle<Result<()>> {

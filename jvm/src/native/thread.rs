@@ -39,13 +39,7 @@ pub fn run(
                 .collect::<Result<Vec<u8>>>()?;
             let name = String::from_utf8(bytes)?;
 
-            let new_thread = JvmThread::new(
-                name.to_string(),
-                jvm.class_loader.clone(),
-                jvm.classes.clone(),
-                jvm.heap.clone(),
-                jvm.monitors.clone(),
-            );
+            let new_thread = jvm.new_thread(name.to_string());
 
             JvmThread::run_with_method(
                 new_thread,
