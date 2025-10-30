@@ -40,7 +40,7 @@ pub struct JvmThread {
     heap: Arc<Mutex<Heap>>,
     monitors: Arc<Mutex<Monitors>>,
 
-    pub stack: Stack,
+    stack: Stack,
     pub creation_time: Instant,
     pub current_thread_object: Option<HeapId>,
     current_thread_id: Option<ThreadId>,
@@ -75,6 +75,10 @@ impl JvmThread {
             self.heap.clone(),
             self.monitors.clone(),
         )
+    }
+
+    pub fn caller_class(&self) -> Result<&ClassIdentifier> {
+        self.stack.caller_class()
     }
 
     pub fn run_with_class(mut thread: Self, main_class: ClassIdentifier) -> JoinHandle<Result<()>> {
