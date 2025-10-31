@@ -41,8 +41,8 @@ pub struct JvmThread {
     monitors: Arc<Mutex<Monitors>>,
 
     stack: Stack,
-    pub creation_time: Instant,
-    pub current_thread_object: Option<HeapId>,
+    creation_time: Instant,
+    current_thread_object: Option<HeapId>,
     current_thread_id: Option<ThreadId>,
 }
 
@@ -112,9 +112,10 @@ impl JvmThread {
     }
 
     #[instrument(name = "", skip_all, fields(t = self.name))]
-    pub fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
+    fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
         self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
         self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
+        self.initialize(&ClassIdentifier::new("java.lang.String")?)?;
         let thread_object_heap_id =
             self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
@@ -146,7 +147,15 @@ impl JvmThread {
         self.execute()
     }
 
-    fn maybe_class(&self, identifier: &ClassIdentifier) -> Result<Option<Class>> {
+    pub fn creation_time(&self) -> &Instant {
+        &self.creation_time
+    }
+
+    pub fn thread_object(&self) -> Option<HeapId> {
+        self.current_thread_object.clone()
+    }
+
+    fn find_class(&self, identifier: &ClassIdentifier) -> Result<Option<Class>> {
         let classes = self
             .classes
             .lock()
@@ -199,7 +208,7 @@ impl JvmThread {
         Ok((typ.clone(), arr.clone()))
     }
 
-    pub fn get_reference_array(&self, id: &HeapId) -> Result<Vec<ReferenceValue>> {
+    fn get_reference_array(&self, id: &HeapId) -> Result<Vec<ReferenceValue>> {
         let heap = self
             .heap
             .lock()
@@ -207,7 +216,7 @@ impl JvmThread {
         heap.get_reference_array(id).cloned()
     }
 
-    pub fn get_array_length(&self, id: &HeapId) -> Result<usize> {
+    fn get_array_length(&self, id: &HeapId) -> Result<usize> {
         let heap = self
             .heap
             .lock()
@@ -215,7 +224,7 @@ impl JvmThread {
         heap.get_array_length(id)
     }
 
-    pub fn allocate_primitive_array(
+    fn allocate_primitive_array(
         &mut self,
         array_type: PrimitiveArrayType,
         values: Vec<PrimitiveArrayValue>,
@@ -253,7 +262,7 @@ impl JvmThread {
         heap.store_into_reference_array(id, index, value)
     }
 
-    pub fn allocate(
+    fn allocate(
         &mut self,
         class_identifier: ClassIdentifier,
         fields: HashMap<String, InstanceField>,
@@ -295,7 +304,7 @@ impl JvmThread {
         heap.set_field(object_id, name, value)
     }
 
-    pub fn allocate_default_primitive_array(
+    fn allocate_default_primitive_array(
         &mut self,
         array_type: PrimitiveArrayType,
         count: usize,
@@ -355,8 +364,8 @@ impl JvmThread {
         monitors.exit_class_monitor(class_identifier, thread_id)
     }
 
-    pub fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
-        if let Some(c) = self.maybe_class(identifier)?
+    fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
+        if let Some(c) = self.find_class(identifier)?
             && (c.initialized() || c.being_initialized())
         {
             return Ok(c.clone());
@@ -421,7 +430,7 @@ impl JvmThread {
         Ok(class)
     }
 
-    pub fn initialize_static_fields(&mut self, class: &mut Class) -> Result<()> {
+    fn initialize_static_fields(&mut self, class: &mut Class) -> Result<()> {
         for field in &class.fields().clone() {
             if field.is_static() {
                 self.initialize_static_final_field(class, field)?;
@@ -431,41 +440,29 @@ impl JvmThread {
         Ok(())
     }
 
-    pub fn initialize_static_final_field(
-        &mut self,
-        class: &mut Class,
-        field: &Field,
-    ) -> Result<()> {
+    fn initialize_static_final_field(&mut self, class: &mut Class, field: &Field) -> Result<()> {
         let name = class.utf8(&field.name_index)?.to_string();
 
         trace!("initializing field {name}");
 
         let field_value = if let Some(constant_value_index) = field.get_constant_value_index() {
-            self.resolve_constant_value(class, constant_value_index)?
+            match class.cp_item(constant_value_index)? {
+                CpInfo::String { string_index } => {
+                    let value = class.utf8(string_index)?;
+                    let heap_id = self.new_string(value.to_string())?;
+                    FieldValue::Reference(ReferenceValue::HeapItem(heap_id))
+                }
+                CpInfo::Integer(val) => FieldValue::Integer(*val),
+                CpInfo::Long(val) => FieldValue::Long(*val),
+                CpInfo::Float(val) => FieldValue::Float(*val),
+                CpInfo::Double(val) => FieldValue::Double(*val),
+                item => bail!("invalid constant pool item: {item:?}"),
+            }
         } else {
             FieldDescriptor::new(class.utf8(&field.descriptor_index)?)?.into()
         };
 
         class.set_static_field(&name, field_value)
-    }
-
-    fn resolve_constant_value(
-        &mut self,
-        class: &Class,
-        constant_value_index: &CpIndex,
-    ) -> Result<FieldValue> {
-        Ok(match class.cp_item(constant_value_index)? {
-            CpInfo::String { string_index } => {
-                let value = class.utf8(string_index)?;
-                let heap_id = self.new_string(value.to_string())?;
-                FieldValue::Reference(ReferenceValue::HeapItem(heap_id))
-            }
-            CpInfo::Integer(val) => FieldValue::Integer(*val),
-            CpInfo::Long(val) => FieldValue::Long(*val),
-            CpInfo::Float(val) => FieldValue::Float(*val),
-            CpInfo::Double(val) => FieldValue::Double(*val),
-            item => bail!("invalid constant pool item: {item:?}"),
-        })
     }
 
     fn execute_clinit(&mut self, class: &Class) -> Result<()> {
@@ -866,7 +863,7 @@ impl JvmThread {
                     return self.stack.push_operand(FrameValue::Int(1));
                 }
 
-                if self.check_super_classes(&class, &identifier)? {
+                if self.has_super_class(&class, &identifier)? {
                     return self.stack.push_operand(FrameValue::Int(1));
                 }
 
@@ -876,7 +873,7 @@ impl JvmThread {
         }
     }
 
-    fn check_super_classes(&mut self, class: &Class, identifier: &ClassIdentifier) -> Result<bool> {
+    fn has_super_class(&mut self, class: &Class, identifier: &ClassIdentifier) -> Result<bool> {
         if class.has_super_class() {
             let super_class = class.super_class()?;
             if &super_class == identifier {
@@ -884,7 +881,7 @@ impl JvmThread {
             }
 
             let class = self.resolve_class(&super_class)?;
-            return self.check_super_classes(&class, identifier);
+            return self.has_super_class(&class, identifier);
         }
 
         Ok(false)
@@ -1551,7 +1548,11 @@ impl JvmThread {
         {
             (class, method)
         } else {
-            let objectref_identifier = self.class_identifier(objectref.reference()?)?;
+            let objectref_identifier = match objectref.reference()? {
+                ReferenceValue::HeapItem(heap_id) => self.heap_get(&heap_id)?.class_identifier()?,
+                ReferenceValue::Class(class_identifier) => class_identifier.clone(),
+                ReferenceValue::Null => bail!("reference is null"),
+            };
             let class = self.class(&objectref_identifier)?;
             let (class, method) = self.select_method(&class, &method, &name, &method_descriptor)?;
             (class, method)
@@ -1765,7 +1766,6 @@ impl JvmThread {
         }
     }
 
-    // TODO: is this the same as self.class_identifier() ?
     fn class_identifier_from_reference(
         &self,
         reference: &ReferenceValue,
@@ -1868,7 +1868,7 @@ impl JvmThread {
         let class = self.initialize(&class_identifier)?;
         let method_descriptor = class.method_descriptor(&method)?;
 
-        if !Self::is_instance_initialization_method(&name, &method_descriptor) {
+        if name != "<init>" || !method_descriptor.is_void() {
             bail!("TODO: invokespecial for non instance initialization methods")
         }
 
@@ -1903,39 +1903,19 @@ impl JvmThread {
 
     fn invoke_dynamic(&mut self, index: &CpIndex) -> Result<()> {
         let current_class = self.current_class()?;
-        let (bootstrap_method_attr_index, name_and_type_index) = if let CpInfo::InvokeDynamic {
+        let (_, name_and_type_index) = if let CpInfo::InvokeDynamic {
             bootstrap_method_attr_index,
             name_and_type_index,
-        } =
-            current_class.cp_item(index)?
+        } = current_class.cp_item(index)?
         {
             (bootstrap_method_attr_index, name_and_type_index)
         } else {
             bail!("no invoke dynamic item at index {index:?}")
         };
 
-        self.resolve_dynamically_computed(bootstrap_method_attr_index, name_and_type_index)?;
-        bail!("TODO: invokedynamic")
-    }
-
-    fn resolve_dynamically_computed(
-        &mut self,
-        bootstrap_method_attr_index: &CpIndex,
-        name_and_type_index: &CpIndex,
-    ) -> Result<()> {
-        let _method_handle =
-            self.resolve_method_handle(bootstrap_method_attr_index, name_and_type_index)?;
-        bail!("TODO: callsite resolution")
-    }
-
-    fn resolve_method_handle(
-        &mut self,
-        _bootstrap_method_attr_index: &CpIndex,
-        name_and_type_index: &CpIndex,
-    ) -> Result<HeapId> {
         let current_class = self.current_class()?;
 
-        let (_name, descriptor) = current_class.name_and_type(name_and_type_index)?;
+        let (_, descriptor) = current_class.name_and_type(name_and_type_index)?;
         let method_descriptor = MethodDescriptor::new(descriptor)?;
         if let ReturnDescriptor::FieldType(FieldType::ObjectType { class_name }) =
             method_descriptor.return_descriptor
@@ -1951,12 +1931,7 @@ impl JvmThread {
 
         let method_type_identifier = ClassIdentifier::new("java.lang.invoke.MethodType")?;
         let _class = self.resolve_class(&method_type_identifier)?;
-
-        bail!("TODO: method handle resolution")
-    }
-
-    fn is_instance_initialization_method(name: &str, descriptor: &MethodDescriptor) -> bool {
-        name == "<init>" && descriptor.is_void()
+        bail!("TODO: callsite resolution")
     }
 
     pub fn new_string(&mut self, value: String) -> Result<HeapId> {
@@ -2166,14 +2141,6 @@ impl JvmThread {
                 Ok((class_identifier, name.to_string(), descriptor.to_string()))
             }
             _ => bail!("no method reference at index {index:?}"),
-        }
-    }
-
-    fn class_identifier(&self, reference: &ReferenceValue) -> Result<ClassIdentifier> {
-        match reference {
-            ReferenceValue::HeapItem(heap_id) => self.heap_get(heap_id)?.class_identifier(),
-            ReferenceValue::Class(class_identifier) => Ok(class_identifier.clone()),
-            ReferenceValue::Null => bail!("reference is null"),
         }
     }
 

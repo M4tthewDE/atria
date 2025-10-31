@@ -108,13 +108,11 @@ pub fn run(
         "jdk.internal.util.SystemProps$Raw" => match name {
             "platformProperties" => {
                 let string_class = ClassIdentifier::new("java.lang.String")?;
-                jvm.initialize(&string_class)?;
                 let array = jvm.allocate_array(string_class, 39)?;
                 Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
             }
             "vmProperties" => {
                 let string_class = ClassIdentifier::new("java.lang.String")?;
-                jvm.initialize(&string_class)?;
                 let array = jvm.allocate_array(string_class, 0)?;
                 Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
             }

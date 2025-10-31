@@ -10,9 +10,7 @@ pub fn run(
     match name {
         "registerNatives" => Ok(None),
         "currentThread" => Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
-            jvm.current_thread_object
-                .clone()
-                .context("no current thread found")?,
+            jvm.thread_object().context("no current thread found")?,
         )))),
         "setPriority0" => {
             let objectref = operands.first().context("no first operand")?;
