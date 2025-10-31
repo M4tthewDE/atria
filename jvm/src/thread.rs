@@ -677,27 +677,8 @@ impl JvmThread {
                 } => self.lookup_switch(default, offset_pairs)?,
             }
 
-            // TODO: this is very brittle
-            match instruction {
-                Instruction::IfNull(_)
-                | Instruction::IfNe(_)
-                | Instruction::IfNonNull(_)
-                | Instruction::Ifeq(_)
-                | Instruction::Ifle(_)
-                | Instruction::Iflt(_)
-                | Instruction::Ifgt(_)
-                | Instruction::IfIcmpge(_)
-                | Instruction::IfIcmpgt(_)
-                | Instruction::IfIcmple(_)
-                | Instruction::IfIcmplt(_)
-                | Instruction::Ifge(_)
-                | Instruction::IfIcmpeq(_)
-                | Instruction::IfIcmpne(_)
-                | Instruction::IfAcmpne(_)
-                | Instruction::Goto(_) => {}
-                Instruction::TableSwitch { .. } => {}
-                Instruction::LookupSwitch { .. } => {}
-                _ => self.stack.offset_pc(instruction.length() as i32)?,
+            if !instruction.is_jump() {
+                self.stack.offset_pc(instruction.length() as i32)?;
             }
         }
 

@@ -460,6 +460,30 @@ impl Instruction {
             } => skip + 4 + offset_pairs.len() * 8,
         }
     }
+
+    pub fn is_jump(&self) -> bool {
+        match self {
+            Instruction::IfNull(_)
+            | Self::IfNe(_)
+            | Self::IfNonNull(_)
+            | Self::Ifeq(_)
+            | Self::Ifle(_)
+            | Self::Iflt(_)
+            | Self::Ifgt(_)
+            | Self::IfIcmpge(_)
+            | Self::IfIcmpgt(_)
+            | Self::IfIcmple(_)
+            | Self::IfIcmplt(_)
+            | Self::Ifge(_)
+            | Self::IfIcmpeq(_)
+            | Self::IfIcmpne(_)
+            | Self::IfAcmpne(_)
+            | Self::Goto(_)
+            | Self::TableSwitch { .. }
+            | Self::LookupSwitch { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 fn table_switch(bytes: &[u8], pc: usize) -> Result<Instruction> {
