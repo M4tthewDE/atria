@@ -84,14 +84,11 @@ impl JvmThread {
     pub fn run_with_class(mut thread: Self, main_class: ClassIdentifier) -> JoinHandle<Result<()>> {
         std::thread::spawn(move || match thread.run_main(&main_class) {
             Ok(_) => Ok(()),
-            Err(err) => {
-                error!(
-                    "thread '{}' has crashed: {err:?} at\n{}",
-                    thread.name,
-                    thread.stack.stack_trace()
-                );
-                Err(err)
-            }
+            Err(err) => Err(anyhow!(
+                "thread '{}' has crashed: {err:?} at\n{}",
+                thread.name,
+                thread.stack.stack_trace()
+            )),
         })
     }
 
