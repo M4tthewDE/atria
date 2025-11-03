@@ -70,9 +70,9 @@ impl Stack {
         frame.current_instruction()
     }
 
-    pub fn current_class(&self) -> Result<ClassIdentifier> {
+    pub fn current_class(&self) -> Result<&ClassIdentifier> {
         let frame = self.frames.last().context("no frame found")?;
-        Ok(frame.class.clone())
+        Ok(&frame.class)
     }
 
     pub fn local_variable(&self, index: usize) -> Result<FrameValue> {

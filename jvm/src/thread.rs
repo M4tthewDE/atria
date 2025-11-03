@@ -152,14 +152,6 @@ impl JvmThread {
         self.current_thread_object.clone()
     }
 
-    fn find_class(&self, identifier: &ClassIdentifier) -> Result<Option<Class>> {
-        let classes = self
-            .classes
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-        Ok(classes.get(identifier).cloned())
-    }
-
     pub fn class(&self, identifier: &ClassIdentifier) -> Result<Class> {
         let classes = self
             .classes
@@ -181,8 +173,7 @@ impl JvmThread {
     }
 
     fn current_class(&self) -> Result<Class> {
-        let current_class = self.stack.current_class()?;
-        self.class(&current_class)
+        self.class(self.stack.current_class()?)
     }
 
     pub fn heap_get(&self, heap_id: &HeapId) -> Result<HeapItem> {
@@ -362,7 +353,12 @@ impl JvmThread {
     }
 
     fn initialize(&mut self, identifier: &ClassIdentifier) -> Result<Class> {
-        if let Some(c) = self.find_class(identifier)?
+        if let Some(c) = self
+            .classes
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?
+            .get(identifier)
+            .cloned()
             && (c.initialized() || c.being_initialized())
         {
             return Ok(c.clone());
