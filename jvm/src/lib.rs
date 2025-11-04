@@ -9,7 +9,7 @@ use crate::heap::Heap;
 use crate::monitor::Monitors;
 use crate::thread::JvmThread;
 use crate::{
-    class::{Class, FieldValue},
+    class::FieldValue,
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
@@ -26,46 +26,25 @@ mod native;
 pub mod stack;
 pub mod thread;
 
-pub struct Jvm {
-    class_loader: Arc<Mutex<BootstrapClassLoader>>,
-    classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
-    main_class: ClassIdentifier,
-    heap: Arc<Mutex<Heap>>,
-    monitors: Arc<Mutex<Monitors>>,
-}
+pub fn run_jar(file: File) -> Result<()> {
+    let archive = ZipArchive::new(file)?;
+    let mut jar = Jar::new(archive);
+    let main_class = jar.manifest()?.main_class;
+    let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk::new()?)];
+    let class_loader = Arc::new(Mutex::new(BootstrapClassLoader::new(sources)));
+    let main_thread = JvmThread::new(
+        "main".to_string(),
+        class_loader,
+        Arc::new(Mutex::new(HashMap::new())),
+        Arc::new(Mutex::new(Heap::default())),
+        Arc::new(Mutex::new(Monitors::default())),
+    );
 
-impl Jvm {
-    pub fn from_jar(file: File) -> Result<Self> {
-        let archive = ZipArchive::new(file)?;
-        let mut jar = Jar::new(archive);
-        let main_class = jar.manifest()?.main_class;
-        let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk::new()?)];
-        let class_loader = Arc::new(Mutex::new(BootstrapClassLoader::new(sources)));
-
-        Ok(Self {
-            class_loader,
-            classes: Arc::new(Mutex::new(HashMap::new())),
-            main_class,
-            heap: Arc::new(Mutex::new(Heap::default())),
-            monitors: Arc::new(Mutex::new(Monitors::default())),
-        })
-    }
-
-    pub fn run(&mut self) -> Result<()> {
-        let main_thread = JvmThread::new(
-            "main".to_string(),
-            self.class_loader.clone(),
-            self.classes.clone(),
-            self.heap.clone(),
-            self.monitors.clone(),
-        );
-
-        let main_handle = JvmThread::run_with_class(main_thread, self.main_class.clone());
-        main_handle
-            .join()
-            .map_err(|err| anyhow!("thread error: {err:?}"))??;
-        bail!("TODO: After main thread exits")
-    }
+    let main_handle = JvmThread::run_with_class(main_thread, main_class);
+    main_handle
+        .join()
+        .map_err(|err| anyhow!("thread error: {err:?}"))??;
+    bail!("TODO: After main thread exits")
 }
 
 impl From<FrameValue> for FieldValue {
@@ -109,8 +88,7 @@ mod tests {
             .init();
 
         let file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
-        let mut jvm = Jvm::from_jar(file).unwrap();
-        let res = jvm.run();
+        let res = run_jar(file);
         assert_eq!(
             "Err(thread 'main' has crashed: no value at offset at
 jdk.internal.misc.Unsafe.getReferenceAcquire::2148
