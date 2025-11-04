@@ -1,9 +1,10 @@
 use anyhow::{Result, bail};
+use common::ClassIdentifier;
 use std::{fs::File, io::Read};
 
 use zip::ZipArchive;
 
-use crate::{ClassIdentifier, loader::ReadClass};
+use crate::loader::ReadClass;
 
 pub struct Jar {
     archive: ZipArchive<File>,
@@ -42,7 +43,7 @@ impl Manifest {
             let parts: Vec<&str> = line.split(' ').collect();
             if parts[0] == "Main-Class:" {
                 return Ok(Self {
-                    main_class: ClassIdentifier::new(parts[1])?,
+                    main_class: ClassIdentifier::parse(parts[1])?,
                 });
             }
         }

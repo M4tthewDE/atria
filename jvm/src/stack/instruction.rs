@@ -462,27 +462,27 @@ impl Instruction {
     }
 
     pub fn is_jump(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Instruction::IfNull(_)
-            | Self::IfNe(_)
-            | Self::IfNonNull(_)
-            | Self::Ifeq(_)
-            | Self::Ifle(_)
-            | Self::Iflt(_)
-            | Self::Ifgt(_)
-            | Self::IfIcmpge(_)
-            | Self::IfIcmpgt(_)
-            | Self::IfIcmple(_)
-            | Self::IfIcmplt(_)
-            | Self::Ifge(_)
-            | Self::IfIcmpeq(_)
-            | Self::IfIcmpne(_)
-            | Self::IfAcmpne(_)
-            | Self::Goto(_)
-            | Self::TableSwitch { .. }
-            | Self::LookupSwitch { .. } => true,
-            _ => false,
-        }
+                | Self::IfNe(_)
+                | Self::IfNonNull(_)
+                | Self::Ifeq(_)
+                | Self::Ifle(_)
+                | Self::Iflt(_)
+                | Self::Ifgt(_)
+                | Self::IfIcmpge(_)
+                | Self::IfIcmpgt(_)
+                | Self::IfIcmple(_)
+                | Self::IfIcmplt(_)
+                | Self::Ifge(_)
+                | Self::IfIcmpeq(_)
+                | Self::IfIcmpne(_)
+                | Self::IfAcmpne(_)
+                | Self::Goto(_)
+                | Self::TableSwitch { .. }
+                | Self::LookupSwitch { .. }
+        )
     }
 }
 

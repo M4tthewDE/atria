@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, bail};
+use common::{ClassIdentifier, HeapId, ThreadId};
 use tracing::info;
-
-use crate::{ClassIdentifier, heap::HeapId, thread::ThreadId};
 
 #[derive(Debug)]
 pub struct Monitor {

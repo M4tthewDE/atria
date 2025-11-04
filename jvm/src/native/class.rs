@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, bail};
+use common::ClassIdentifier;
+use common::ReferenceValue;
 
-use crate::{ClassIdentifier, ReferenceValue, stack::FrameValue, thread::JvmThread};
+use crate::{stack::FrameValue, thread::JvmThread};
 
 pub fn run(
     jvm: &mut JvmThread,
@@ -41,28 +43,28 @@ pub fn run(
             let name = String::from_utf8(bytes)?;
             match name.as_str() {
                 "int" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Integer")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Integer".to_owned()),
                 )))),
                 "boolean" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Boolean")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Boolean".to_owned()),
                 )))),
                 "byte" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Byte")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Byte".to_owned()),
                 )))),
                 "short" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Short")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Short".to_owned()),
                 )))),
                 "char" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Character")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Character".to_owned()),
                 )))),
                 "double" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Double")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Double".to_owned()),
                 )))),
                 "long" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Long")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Long".to_owned()),
                 )))),
                 "float" => Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                    ClassIdentifier::new("java.lang.Float")?,
+                    ClassIdentifier::new("java.lang".to_owned(), "Float".to_owned()),
                 )))),
                 _ => bail!("invalid primitive class name: '{name}'"),
             }
@@ -81,7 +83,7 @@ pub fn run(
                 .collect::<Result<Vec<u8>>>()?;
             let name = String::from_utf8(bytes)?;
             Ok(Some(FrameValue::Reference(ReferenceValue::Class(
-                ClassIdentifier::new(&name)?,
+                ClassIdentifier::parse(&name)?,
             ))))
         }
         "isPrimitive" => {

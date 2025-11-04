@@ -1,9 +1,11 @@
+use common::ReferenceValue;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
+use common::{ClassIdentifier, HeapId, ThreadId};
 use parser::class::ClassFile;
 use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
@@ -13,25 +15,15 @@ use parser::class::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::code::Code;
-use crate::heap::{Heap, HeapId, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
+use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
-use crate::{ClassIdentifier, ReferenceValue, native};
+use crate::native;
+use crate::stack::code::Code;
 use crate::{
     class::{Class, FieldValue},
-    instruction::Instruction,
     loader::BootstrapClassLoader,
-    stack::{FrameValue, Stack},
+    stack::{FrameValue, Stack, instruction::Instruction},
 };
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ThreadId(i64);
-
-impl From<i64> for ThreadId {
-    fn from(value: i64) -> Self {
-        Self(value)
-    }
-}
 
 pub struct JvmThread {
     name: String,
@@ -110,9 +102,18 @@ impl JvmThread {
 
     #[instrument(name = "", skip_all, fields(t = self.name))]
     fn run_main(&mut self, main_class: &ClassIdentifier) -> Result<()> {
-        self.initialize(&ClassIdentifier::new("java.lang.Class")?)?;
-        self.initialize(&ClassIdentifier::new("java.lang.Object")?)?;
-        self.initialize(&ClassIdentifier::new("java.lang.String")?)?;
+        self.initialize(&ClassIdentifier::new(
+            "java.lang".to_owned(),
+            "Class".to_owned(),
+        ))?;
+        self.initialize(&ClassIdentifier::new(
+            "java.lang".to_owned(),
+            "Object".to_owned(),
+        ))?;
+        self.initialize(&ClassIdentifier::new(
+            "java.lang".to_owned(),
+            "String".to_owned(),
+        ))?;
         let thread_object_heap_id =
             self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
@@ -371,7 +372,7 @@ impl JvmThread {
         class.initializing();
         self.initialize_static_fields(&mut class)?;
 
-        let class_identifier = ClassIdentifier::new("java.lang.Class")?;
+        let class_identifier = ClassIdentifier::new("java.lang".to_owned(), "Class".to_owned());
         if identifier != &class_identifier {
             let class_class = self.class(&class_identifier)?;
             for field in class_class.fields() {
@@ -393,7 +394,7 @@ impl JvmThread {
         }
 
         self.execute_clinit(&class)?;
-        if identifier == &ClassIdentifier::new("java.lang.System")? {
+        if identifier == &ClassIdentifier::new("java.lang".to_owned(), "System".to_owned()) {
             let (_, method) = self.resolve_method(identifier, "initPhase1", "()V")?;
             let class = self.class(identifier)?;
             let descriptor = class.method_descriptor(&method)?;
@@ -786,7 +787,7 @@ impl JvmThread {
 
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
-                let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
+                let identifier = ClassIdentifier::parse(current_class.utf8(name_index)?)?;
                 let class = self.resolve_class(&identifier)?;
                 let heap_item = self.heap_get(object_ref.heap_id()?)?.clone();
                 let object_identifier = heap_item.class_identifier()?;
@@ -825,7 +826,7 @@ impl JvmThread {
 
         match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
-                let identifier = ClassIdentifier::new(current_class.utf8(name_index)?)?;
+                let identifier = ClassIdentifier::parse(current_class.utf8(name_index)?)?;
                 let class = self.resolve_class(&identifier)?;
                 let object_identifier = heap_item.class_identifier()?;
 
@@ -1482,7 +1483,7 @@ impl JvmThread {
         let value = match current_class.cp_item(index)? {
             CpInfo::Class { name_index } => {
                 let name = current_class.utf8(name_index)?;
-                let identifier = ClassIdentifier::new(name)?;
+                let identifier = ClassIdentifier::parse(name)?;
                 self.resolve_class(&identifier)?;
 
                 FrameValue::Reference(ReferenceValue::Class(identifier))
@@ -1517,13 +1518,13 @@ impl JvmThread {
         }
 
         let (class, method) = if method.is_private()
-            || class_identifier == ClassIdentifier::new("java.lang.Class")?
+            || class_identifier == ClassIdentifier::new("java.lang".to_owned(), "Class".to_owned())
             || objectref.reference()?.is_class()
         {
             (class, method)
         } else {
             let objectref_identifier = match objectref.reference()? {
-                ReferenceValue::HeapItem(heap_id) => self.heap_get(&heap_id)?.class_identifier()?,
+                ReferenceValue::HeapItem(heap_id) => self.heap_get(heap_id)?.class_identifier()?,
                 ReferenceValue::Class(class_identifier) => class_identifier.clone(),
                 ReferenceValue::Null => bail!("reference is null"),
             };
@@ -1727,7 +1728,7 @@ impl JvmThread {
         }
 
         // TODO: is this good? maybe classes should live on the heap as well?
-        if class_identifier == ClassIdentifier::new("java.lang.Class")? {
+        if class_identifier == ClassIdentifier::new("java.lang".to_owned(), "Class".to_owned()) {
             let identifier = self.class_identifier_from_reference(object_ref.reference()?)?;
             let class = self.class(&identifier)?;
             let field_value = class.get_class_field_value(&name)?;
@@ -1894,22 +1895,23 @@ impl JvmThread {
         if let ReturnDescriptor::FieldType(FieldType::ObjectType { class_name }) =
             method_descriptor.return_descriptor
         {
-            self.initialize(&ClassIdentifier::new(&class_name)?)?;
+            self.initialize(&ClassIdentifier::parse(&class_name)?)?;
         }
 
         for parameter in method_descriptor.parameters {
             if let FieldType::ObjectType { class_name } = parameter {
-                self.initialize(&ClassIdentifier::new(&class_name)?)?;
+                self.initialize(&ClassIdentifier::parse(&class_name)?)?;
             }
         }
 
-        let method_type_identifier = ClassIdentifier::new("java.lang.invoke.MethodType")?;
+        let method_type_identifier =
+            ClassIdentifier::new("java.lang.invoke".to_owned(), "MethodType".to_owned());
         let _class = self.resolve_class(&method_type_identifier)?;
         bail!("TODO: callsite resolution")
     }
 
     pub fn new_string(&mut self, value: String) -> Result<HeapId> {
-        let string_identifier = ClassIdentifier::new("java.lang.String")?;
+        let string_identifier = ClassIdentifier::new("java.lang".to_owned(), "String".to_owned());
         let class = self.resolve_class(&string_identifier)?;
 
         let fields = self.default_instance_fields(&class, 0)?;
@@ -1928,7 +1930,7 @@ impl JvmThread {
     fn new_thread_object(&mut self, name: String, thread_group_name: String) -> Result<HeapId> {
         let name_string = self.new_string(name)?;
         let thread_group = self.new_thread_group_object(thread_group_name)?;
-        let thread_identifier = ClassIdentifier::new("java.lang.Thread")?;
+        let thread_identifier = ClassIdentifier::new("java.lang".to_owned(), "Thread".to_owned());
         let class = self.resolve_class(&thread_identifier)?;
 
         let fields = self.default_instance_fields(&class, 0)?;
@@ -1963,7 +1965,8 @@ impl JvmThread {
 
     fn new_thread_group_object(&mut self, name: String) -> Result<HeapId> {
         let name_string = self.new_string(name)?;
-        let thread_identifier = ClassIdentifier::new("java.lang.ThreadGroup")?;
+        let thread_identifier =
+            ClassIdentifier::new("java.lang".to_owned(), "ThreadGroup".to_owned());
         let class = self.resolve_class(&thread_identifier)?;
 
         let fields = self.default_instance_fields(&class, 0)?;
@@ -2047,7 +2050,10 @@ impl JvmThread {
             return Ok(m.clone());
         }
 
-        let object_class = self.class(&ClassIdentifier::new("java.lang.Object")?)?;
+        let object_class = self.class(&ClassIdentifier::new(
+            "java.lang".to_owned(),
+            "Object".to_owned(),
+        ))?;
         if let Ok(object_method) = object_class.method(name, descriptor)
             && object_method.is_public()
             && !object_method.is_static()

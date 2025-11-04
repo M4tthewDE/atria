@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
+use common::{ClassIdentifier, HeapId, ReferenceValue};
 use parser::class::{
     ClassFile,
     access_flags::AccessFlag,
@@ -10,8 +11,6 @@ use parser::class::{
     method::Method,
 };
 use tracing::trace;
-
-use crate::{ClassIdentifier, ReferenceValue, heap::HeapId};
 
 #[derive(Clone)]
 pub struct Class {
@@ -66,7 +65,7 @@ impl Class {
     }
 
     pub fn super_class(&self) -> Result<ClassIdentifier> {
-        ClassIdentifier::new(
+        ClassIdentifier::parse(
             self.class_file
                 .constant_pool
                 .class_name(&self.class_file.super_class)?,
@@ -98,7 +97,7 @@ impl Class {
     }
 
     pub fn class_identifier(&self, index: &CpIndex) -> Result<ClassIdentifier> {
-        ClassIdentifier::new(self.class_file.constant_pool.class_name(index)?)
+        ClassIdentifier::parse(self.class_file.constant_pool.class_name(index)?)
     }
 
     pub fn name_and_type(&self, index: &CpIndex) -> Result<(&str, &str)> {
