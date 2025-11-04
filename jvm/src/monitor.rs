@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use anyhow::{Result, bail};
-use common::ClassIdentifier;
+use common::{ClassIdentifier, HeapId};
 use tracing::info;
 
-use crate::{heap::HeapId, thread::ThreadId};
+use crate::thread::ThreadId;
 
 #[derive(Debug)]
 pub struct Monitor {

@@ -1,20 +1,12 @@
 use anyhow::{Result, bail};
 use common::ClassIdentifier;
+use common::HeapId;
 use std::collections::HashMap;
 
 use anyhow::Context;
 use tracing::debug;
 
 use crate::{ReferenceValue, class::FieldValue};
-
-#[derive(Eq, Hash, PartialEq, Debug, Clone)]
-pub struct HeapId(u64);
-
-impl From<u64> for HeapId {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct InstanceField {

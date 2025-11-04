@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
-use common::ClassIdentifier;
+use common::{ClassIdentifier, HeapId};
 use parser::class::{
     ClassFile,
     access_flags::AccessFlag,
@@ -12,7 +12,7 @@ use parser::class::{
 };
 use tracing::trace;
 
-use crate::{ReferenceValue, heap::HeapId};
+use crate::ReferenceValue;
 
 #[derive(Clone)]
 pub struct Class {

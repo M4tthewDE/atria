@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
-use common::ClassIdentifier;
+use common::{ClassIdentifier, HeapId};
 use parser::class::ClassFile;
 use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
@@ -15,7 +15,7 @@ use parser::class::{
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::code::Code;
-use crate::heap::{Heap, HeapId, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
+use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
 use crate::{ReferenceValue, native};
 use crate::{

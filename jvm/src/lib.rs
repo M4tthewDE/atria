@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, fs::File};
 
 use anyhow::{Result, anyhow, bail};
-use common::ClassIdentifier;
+use common::{ClassIdentifier, HeapId};
 use zip::ZipArchive;
 
-use crate::heap::{Heap, HeapId};
+use crate::heap::Heap;
 use crate::monitor::Monitors;
 use crate::thread::JvmThread;
 use crate::{

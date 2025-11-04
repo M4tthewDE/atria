@@ -5,6 +5,15 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+#[derive(Eq, Hash, PartialEq, Debug, Clone)]
+pub struct HeapId(u64);
+
+impl From<u64> for HeapId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 /// Identifies a class using package and name
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct ClassIdentifier {

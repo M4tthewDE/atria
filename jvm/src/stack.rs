@@ -1,6 +1,6 @@
-use crate::{ReferenceValue, code::Code, heap::HeapId, instruction::Instruction};
+use crate::{ReferenceValue, code::Code, instruction::Instruction};
 use anyhow::{Context, Result, bail};
-use common::ClassIdentifier;
+use common::{ClassIdentifier, HeapId};
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
 
