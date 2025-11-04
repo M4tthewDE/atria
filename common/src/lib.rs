@@ -1,4 +1,5 @@
 use anyhow::Context;
+use anyhow::bail;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -127,6 +128,37 @@ impl Display for ClassIdentifier {
 impl Debug for ClassIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}", self.package, self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub enum ReferenceValue {
+    HeapItem(HeapId),
+    Class(ClassIdentifier),
+    Null,
+}
+
+impl ReferenceValue {
+    pub fn heap_id(&self) -> Result<&HeapId> {
+        match self {
+            ReferenceValue::HeapItem(heap_id) => Ok(heap_id),
+            _ => bail!("no heap id found"),
+        }
+    }
+
+    pub fn class_identifier(&self) -> Result<&ClassIdentifier> {
+        match self {
+            ReferenceValue::Class(class_identifier) => Ok(class_identifier),
+            _ => bail!("no class identifier found"),
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
+    }
+
+    pub fn is_class(&self) -> bool {
+        matches!(self, Self::Class(_))
     }
 }
 

@@ -1,10 +1,11 @@
+use common::ReferenceValue;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use anyhow::{Context, Result, bail};
 use common::ClassIdentifier;
 use tracing::{info, warn};
 
-use crate::{ReferenceValue, stack::FrameValue, thread::JvmThread};
+use crate::{stack::FrameValue, thread::JvmThread};
 
 mod class;
 mod misc;

@@ -1,7 +1,8 @@
 use anyhow::{Context, Result, bail};
 use common::ClassIdentifier;
+use common::ReferenceValue;
 
-use crate::{ReferenceValue, stack::FrameValue, thread::JvmThread};
+use crate::{stack::FrameValue, thread::JvmThread};
 
 pub fn run(
     jvm: &mut JvmThread,

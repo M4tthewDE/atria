@@ -1,3 +1,4 @@
+use common::ReferenceValue;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -17,7 +18,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::code::Code;
 use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
-use crate::{ReferenceValue, native};
+use crate::native;
 use crate::{
     class::{Class, FieldValue},
     instruction::Instruction,

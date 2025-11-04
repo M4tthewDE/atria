@@ -1,10 +1,8 @@
-use std::fmt::Debug;
-use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, fs::File};
 
 use anyhow::{Result, anyhow, bail};
-use common::{ClassIdentifier, HeapId};
+use common::ClassIdentifier;
 use zip::ZipArchive;
 
 use crate::heap::Heap;
@@ -94,37 +92,6 @@ impl From<FieldValue> for FrameValue {
             FieldValue::Float(val) => Self::Float(val),
             FieldValue::Double(val) => Self::Double(val),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Hash)]
-pub enum ReferenceValue {
-    HeapItem(HeapId),
-    Class(ClassIdentifier),
-    Null,
-}
-
-impl ReferenceValue {
-    pub fn heap_id(&self) -> Result<&HeapId> {
-        match self {
-            ReferenceValue::HeapItem(heap_id) => Ok(heap_id),
-            _ => bail!("no heap id found"),
-        }
-    }
-
-    pub fn class_identifier(&self) -> Result<&ClassIdentifier> {
-        match self {
-            ReferenceValue::Class(class_identifier) => Ok(class_identifier),
-            _ => bail!("no class identifier found"),
-        }
-    }
-
-    pub fn is_null(&self) -> bool {
-        matches!(self, Self::Null)
-    }
-
-    pub fn is_class(&self) -> bool {
-        matches!(self, Self::Class(_))
     }
 }
 

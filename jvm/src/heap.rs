@@ -1,12 +1,13 @@
 use anyhow::{Result, bail};
 use common::ClassIdentifier;
 use common::HeapId;
+use common::ReferenceValue;
 use std::collections::HashMap;
 
 use anyhow::Context;
 use tracing::debug;
 
-use crate::{ReferenceValue, class::FieldValue};
+use crate::class::FieldValue;
 
 #[derive(Debug, Clone)]
 pub struct InstanceField {
