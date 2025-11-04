@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io::Cursor};
 
-use crate::ClassIdentifier;
 use anyhow::{Context, Result, bail};
+use common::ClassIdentifier;
 use parser::class::{ClassFile, access_flags::AccessFlag};
 use tracing::trace;
 
@@ -45,7 +45,7 @@ impl BootstrapClassLoader {
                 let name = class_file
                     .constant_pool
                     .class_name(&class_file.super_class)?;
-                let identifier = ClassIdentifier::new(name)?;
+                let identifier = ClassIdentifier::parse(name)?;
                 self.load(&identifier)?;
             }
 
@@ -74,8 +74,7 @@ impl BootstrapClassLoader {
         let name = class_file
             .constant_pool
             .class_name(&class_file.this_class)?;
-        let identifier = identifier.with_slashes()?;
-        if name != identifier {
+        if ClassIdentifier::parse(name)? != *identifier {
             bail!(
                 "identifier does not match class file, {identifier} vs {name}, (TODO: throw NoClassDefFoundError)"
             )

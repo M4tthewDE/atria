@@ -1,10 +1,11 @@
 use anyhow::{Result, bail};
+use common::ClassIdentifier;
 use std::collections::HashMap;
 
 use anyhow::Context;
 use tracing::debug;
 
-use crate::{ClassIdentifier, ReferenceValue, class::FieldValue};
+use crate::{ReferenceValue, class::FieldValue};
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone)]
 pub struct HeapId(u64);
@@ -73,7 +74,7 @@ impl HeapItem {
         Ok(match self {
             HeapItem::Object(object) => object.class_identifier.clone(),
             HeapItem::ReferenceArray { class, .. } => class.clone(),
-            HeapItem::PrimitiveArray(array_type, _) => array_type.class_identifier()?,
+            HeapItem::PrimitiveArray(array_type, _) => array_type.class_identifier(),
         })
     }
 
@@ -126,16 +127,32 @@ impl PrimitiveArrayType {
         }
     }
 
-    pub fn class_identifier(&self) -> Result<ClassIdentifier> {
+    pub fn class_identifier(&self) -> ClassIdentifier {
         match self {
-            PrimitiveArrayType::Boolean => ClassIdentifier::new("java.lang.Boolean"),
-            PrimitiveArrayType::Char => ClassIdentifier::new("java.lang.Character"),
-            PrimitiveArrayType::Float => ClassIdentifier::new("java.lang.Float"),
-            PrimitiveArrayType::Double => ClassIdentifier::new("java.lang.Double"),
-            PrimitiveArrayType::Byte => ClassIdentifier::new("java.lang.Byte"),
-            PrimitiveArrayType::Short => ClassIdentifier::new("java.lang.Short"),
-            PrimitiveArrayType::Int => ClassIdentifier::new("java.lang.Integer"),
-            PrimitiveArrayType::Long => ClassIdentifier::new("java.lang.Long"),
+            PrimitiveArrayType::Boolean => {
+                ClassIdentifier::new("java.lang".to_owned(), "Boolean".to_owned())
+            }
+            PrimitiveArrayType::Char => {
+                ClassIdentifier::new("java.lang".to_owned(), "Character".to_owned())
+            }
+            PrimitiveArrayType::Float => {
+                ClassIdentifier::new("java.lang".to_owned(), "Float".to_owned())
+            }
+            PrimitiveArrayType::Double => {
+                ClassIdentifier::new("java.lang".to_owned(), "Double".to_owned())
+            }
+            PrimitiveArrayType::Byte => {
+                ClassIdentifier::new("java.lang".to_owned(), "Byte".to_owned())
+            }
+            PrimitiveArrayType::Short => {
+                ClassIdentifier::new("java.lang".to_owned(), "Short".to_owned())
+            }
+            PrimitiveArrayType::Int => {
+                ClassIdentifier::new("java.lang".to_owned(), "Integer".to_owned())
+            }
+            PrimitiveArrayType::Long => {
+                ClassIdentifier::new("java.lang".to_owned(), "Long".to_owned())
+            }
         }
     }
 }

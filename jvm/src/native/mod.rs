@@ -1,9 +1,10 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use anyhow::{Context, Result, bail};
+use common::ClassIdentifier;
 use tracing::{info, warn};
 
-use crate::{ClassIdentifier, ReferenceValue, stack::FrameValue, thread::JvmThread};
+use crate::{ReferenceValue, stack::FrameValue, thread::JvmThread};
 
 mod class;
 mod misc;
@@ -107,12 +108,14 @@ pub fn run(
         },
         "jdk.internal.util.SystemProps$Raw" => match name {
             "platformProperties" => {
-                let string_class = ClassIdentifier::new("java.lang.String")?;
+                let string_class =
+                    ClassIdentifier::new("java.lang".to_owned(), "String".to_owned());
                 let array = jvm.allocate_array(string_class, 39)?;
                 Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
             }
             "vmProperties" => {
-                let string_class = ClassIdentifier::new("java.lang.String")?;
+                let string_class =
+                    ClassIdentifier::new("java.lang".to_owned(), "String".to_owned());
                 let array = jvm.allocate_array(string_class, 0)?;
                 Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(array))))
             }

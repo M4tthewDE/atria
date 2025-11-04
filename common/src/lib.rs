@@ -18,7 +18,60 @@ impl ClassIdentifier {
     }
 
     pub fn parse(raw: &str) -> Result<Self> {
-        let raw = raw.replace("/", ".");
+        let raw = raw.replace("/", ".").replace(";", "");
+        let raw: String = raw.chars().skip_while(|c| *c == 'L' || *c == '[').collect();
+
+        match raw.as_str() {
+            "B" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Byte".to_owned(),
+                });
+            }
+            "C" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Character".to_owned(),
+                });
+            }
+            "D" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Double".to_owned(),
+                });
+            }
+            "F" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Float".to_owned(),
+                });
+            }
+            "I" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Integer".to_owned(),
+                });
+            }
+            "J" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Long".to_owned(),
+                });
+            }
+            "S" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Short".to_owned(),
+                });
+            }
+            "Z" => {
+                return Ok(Self {
+                    package: "java.lang".to_owned(),
+                    name: "Boolean".to_owned(),
+                });
+            }
+            _ => {}
+        }
 
         let mut parts: Vec<&str> = raw.split('.').collect();
         let name = parts
@@ -89,6 +142,27 @@ mod tests {
         let class_identifier = ClassIdentifier::parse("java.lang").unwrap();
         assert_eq!(class_identifier.package, "java");
         assert_eq!(class_identifier.name, "lang");
+    }
+
+    #[test]
+    fn test_parse_from_field_descriptor() {
+        let class_identifier = ClassIdentifier::parse("Ljava.lang.System").unwrap();
+        assert_eq!(class_identifier.package, "java.lang");
+        assert_eq!(class_identifier.name, "System");
+    }
+
+    #[test]
+    fn test_parse_from_field_descriptor_array() {
+        let class_identifier = ClassIdentifier::parse("[[Ljava.lang.System").unwrap();
+        assert_eq!(class_identifier.package, "java.lang");
+        assert_eq!(class_identifier.name, "System");
+    }
+
+    #[test]
+    fn test_parse_from_field_descriptor_primitive_int() {
+        let class_identifier = ClassIdentifier::parse("I").unwrap();
+        assert_eq!(class_identifier.package, "java.lang");
+        assert_eq!(class_identifier.name, "Integer");
     }
 
     #[test]

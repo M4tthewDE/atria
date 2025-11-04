@@ -15,7 +15,7 @@ pub fn run(
         "registerNatives" => Ok(None),
         "nanoTime" => {
             let now = Instant::now();
-            let elapsed = now.duration_since(jvm.creation_time().clone()).as_nanos();
+            let elapsed = now.duration_since(*jvm.creation_time()).as_nanos();
             Ok(Some(FrameValue::Long(elapsed as i64)))
         }
         "identityHashCode" => {
