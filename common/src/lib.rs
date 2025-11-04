@@ -5,6 +5,15 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ThreadId(i64);
+
+impl From<i64> for ThreadId {
+    fn from(value: i64) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Eq, Hash, PartialEq, Debug, Clone)]
 pub struct HeapId(u64);
 

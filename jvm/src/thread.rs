@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
-use common::{ClassIdentifier, HeapId};
+use common::{ClassIdentifier, HeapId, ThreadId};
 use parser::class::ClassFile;
 use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
@@ -24,15 +24,6 @@ use crate::{
     loader::BootstrapClassLoader,
     stack::{FrameValue, Stack},
 };
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ThreadId(i64);
-
-impl From<i64> for ThreadId {
-    fn from(value: i64) -> Self {
-        Self(value)
-    }
-}
 
 pub struct JvmThread {
     name: String,
