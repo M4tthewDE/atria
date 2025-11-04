@@ -7,11 +7,9 @@ use zip::ZipArchive;
 
 use crate::thread::JvmThread;
 use crate::{
-    class::FieldValue,
     jar::Jar,
     jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
-    stack::FrameValue,
 };
 
 pub mod class;
@@ -19,8 +17,6 @@ pub mod heap;
 pub mod jar;
 pub mod jdk;
 pub mod loader;
-mod native;
-pub mod stack;
 pub mod thread;
 
 pub fn run_jar(file: File) -> Result<()> {
@@ -36,31 +32,6 @@ pub fn run_jar(file: File) -> Result<()> {
         .join()
         .map_err(|err| anyhow!("thread error: {err:?}"))??;
     bail!("TODO: After main thread exits")
-}
-
-impl From<FrameValue> for FieldValue {
-    fn from(value: FrameValue) -> Self {
-        match value {
-            FrameValue::Reference(reference_value) => Self::Reference(reference_value),
-            FrameValue::Int(val) => Self::Integer(val),
-            FrameValue::Long(val) => Self::Long(val),
-            FrameValue::Float(val) => Self::Float(val),
-            FrameValue::Double(val) => Self::Double(val),
-            FrameValue::Reserved => panic!("impossible"),
-        }
-    }
-}
-
-impl From<FieldValue> for FrameValue {
-    fn from(value: FieldValue) -> Self {
-        match value {
-            FieldValue::Reference(reference_value) => Self::Reference(reference_value),
-            FieldValue::Integer(val) => Self::Int(val),
-            FieldValue::Long(val) => Self::Long(val),
-            FieldValue::Float(val) => Self::Float(val),
-            FieldValue::Double(val) => Self::Double(val),
-        }
-    }
 }
 
 #[cfg(test)]

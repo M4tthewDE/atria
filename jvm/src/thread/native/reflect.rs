@@ -1,7 +1,8 @@
+use crate::thread::FrameValue;
 use anyhow::{Result, bail};
 use common::ReferenceValue;
 
-use crate::{stack::FrameValue, thread::JvmThread};
+use crate::thread::JvmThread;
 
 pub fn run(jvm: &mut JvmThread, name: &str) -> Result<Option<FrameValue>> {
     match name {

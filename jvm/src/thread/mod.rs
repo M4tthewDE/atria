@@ -14,18 +14,18 @@ use parser::class::{
     field::Field,
     method::Method,
 };
+use stack::{FrameValue, Stack, code::Code, instruction::Instruction};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
-use crate::native;
-use crate::stack::code::Code;
 use crate::{
     class::{Class, FieldValue},
     loader::BootstrapClassLoader,
-    stack::{FrameValue, Stack, instruction::Instruction},
 };
 
 mod monitor;
+mod native;
+mod stack;
 
 pub struct JvmThread {
     name: String,
@@ -2164,6 +2164,31 @@ impl JvmThread {
             }
         } else {
             Ok(())
+        }
+    }
+}
+
+impl From<FrameValue> for FieldValue {
+    fn from(value: FrameValue) -> Self {
+        match value {
+            FrameValue::Reference(reference_value) => Self::Reference(reference_value),
+            FrameValue::Int(val) => Self::Integer(val),
+            FrameValue::Long(val) => Self::Long(val),
+            FrameValue::Float(val) => Self::Float(val),
+            FrameValue::Double(val) => Self::Double(val),
+            FrameValue::Reserved => panic!("impossible"),
+        }
+    }
+}
+
+impl From<FieldValue> for FrameValue {
+    fn from(value: FieldValue) -> Self {
+        match value {
+            FieldValue::Reference(reference_value) => Self::Reference(reference_value),
+            FieldValue::Integer(val) => Self::Int(val),
+            FieldValue::Long(val) => Self::Long(val),
+            FieldValue::Float(val) => Self::Float(val),
+            FieldValue::Double(val) => Self::Double(val),
         }
     }
 }

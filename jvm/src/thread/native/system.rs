@@ -1,10 +1,11 @@
+use crate::thread::FrameValue;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::{hash::DefaultHasher, time::Instant};
 
 use anyhow::{Context, Result, bail};
 
-use crate::{stack::FrameValue, thread::JvmThread};
+use crate::thread::JvmThread;
 
 pub fn run(
     jvm: &mut JvmThread,
