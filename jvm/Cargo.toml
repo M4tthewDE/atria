@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.100"
 parser = { version = "0.1.0", path = "../parser" }
 jdk = { version = "0.1.0", path = "../jdk" }
+common = { version = "0.1.0", path = "../common" }
 tracing = "0.1.41"
 zip = "5.1.1"
 

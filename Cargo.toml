@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["cli", "jdk", "jvm","parser"]
+members = ["cli", "common", "jdk", "jvm","parser"]
 
 
 [profile.release]

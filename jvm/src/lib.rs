@@ -100,7 +100,6 @@ impl From<FieldValue> for FrameValue {
 /// Identifies a class using package and name
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct ClassIdentifier {
-    is_array: bool,
     package: String,
     name: String,
 }
@@ -136,7 +135,6 @@ impl ClassIdentifier {
             parts.truncate(parts.len() - 1);
 
             Ok(Self {
-                is_array: false,
                 package: parts.join("."),
                 name,
             })
