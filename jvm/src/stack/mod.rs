@@ -1,9 +1,13 @@
-use crate::{code::Code, instruction::Instruction};
 use anyhow::{Context, Result, bail};
+use code::Code;
 use common::ReferenceValue;
 use common::{ClassIdentifier, HeapId};
+use instruction::Instruction;
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
+
+pub mod code;
+pub mod instruction;
 
 #[derive(Debug, Default)]
 pub struct Stack {

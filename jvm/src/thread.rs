@@ -15,15 +15,14 @@ use parser::class::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::code::Code;
 use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 use crate::monitor::Monitors;
 use crate::native;
+use crate::stack::code::Code;
 use crate::{
     class::{Class, FieldValue},
-    instruction::Instruction,
     loader::BootstrapClassLoader,
-    stack::{FrameValue, Stack},
+    stack::{FrameValue, Stack, instruction::Instruction},
 };
 
 pub struct JvmThread {
