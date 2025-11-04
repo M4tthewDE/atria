@@ -26,6 +26,7 @@ pub mod jar;
 pub mod jdk;
 pub mod loader;
 mod monitor;
+mod native;
 pub mod stack;
 pub mod thread;
 
@@ -221,14 +222,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn system() -> Result<()> {
+    fn system() {
         tracing_subscriber::registry()
             .with(fmt::layer())
             .with(EnvFilter::from_default_env())
             .init();
 
         let file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
-        let mut jvm = Jvm::from_jar(file)?;
-        jvm.run()
+        let mut jvm = Jvm::from_jar(file).unwrap();
+        let res = jvm.run();
+        assert_eq!(
+            "Err(thread 'main' has crashed: no value at offset at
+jdk.internal.misc.Unsafe.getReferenceAcquire::2148
+java.util.concurrent.ConcurrentHashMap.tabAt::760
+java.util.concurrent.ConcurrentHashMap.putVal::1018
+java.util.concurrent.ConcurrentHashMap.put::1006
+java.util.Properties.put::1301
+java.lang.System.createProperties::2087
+java.lang.System.initPhase1::2120
+sun.security.action.GetPropertyAction.privilegedGetProperties::152
+java.lang.invoke.MethodHandleStatics.<clinit>::66
+java.lang.invoke.MethodHandle.<clinit>::1777
+java.lang.invoke.MethodType.<clinit>::688
+org.springframework.boot.loader.launch.JarModeRunner.<clinit>::33
+org.springframework.boot.loader.launch.Launcher.<clinit>::42
+)",
+            format!("{res:?}")
+        );
     }
 }
