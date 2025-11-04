@@ -1,12 +1,10 @@
+use std::fs::File;
 use std::sync::{Arc, Mutex};
-use std::{collections::HashMap, fs::File};
 
 use anyhow::{Result, anyhow, bail};
 use common::ClassIdentifier;
 use zip::ZipArchive;
 
-use crate::heap::Heap;
-use crate::monitor::Monitors;
 use crate::thread::JvmThread;
 use crate::{
     class::FieldValue,
@@ -21,7 +19,6 @@ pub mod heap;
 pub mod jar;
 pub mod jdk;
 pub mod loader;
-mod monitor;
 mod native;
 pub mod stack;
 pub mod thread;
@@ -32,13 +29,7 @@ pub fn run_jar(file: File) -> Result<()> {
     let main_class = jar.manifest()?.main_class;
     let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk::new()?)];
     let class_loader = Arc::new(Mutex::new(BootstrapClassLoader::new(sources)));
-    let main_thread = JvmThread::new(
-        "main".to_string(),
-        class_loader,
-        Arc::new(Mutex::new(HashMap::new())),
-        Arc::new(Mutex::new(Heap::default())),
-        Arc::new(Mutex::new(Monitors::default())),
-    );
+    let main_thread = JvmThread::default("main".to_string(), class_loader);
 
     let main_handle = JvmThread::run_with_class(main_thread, main_class);
     main_handle

@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
 use common::{ClassIdentifier, HeapId, ThreadId};
+use monitor::Monitors;
 use parser::class::ClassFile;
 use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
@@ -16,7 +17,6 @@ use parser::class::{
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
-use crate::monitor::Monitors;
 use crate::native;
 use crate::stack::code::Code;
 use crate::{
@@ -24,6 +24,8 @@ use crate::{
     loader::BootstrapClassLoader,
     stack::{FrameValue, Stack, instruction::Instruction},
 };
+
+mod monitor;
 
 pub struct JvmThread {
     name: String,
@@ -39,7 +41,22 @@ pub struct JvmThread {
 }
 
 impl JvmThread {
-    pub fn new(
+    pub fn default(name: String, class_loader: Arc<Mutex<BootstrapClassLoader>>) -> Self {
+        Self {
+            name,
+            class_loader,
+
+            classes: Arc::new(Mutex::new(HashMap::new())),
+            heap: Arc::new(Mutex::new(Heap::default())),
+            monitors: Arc::new(Mutex::new(Monitors::default())),
+            stack: Stack::default(),
+            creation_time: Instant::now(),
+            current_thread_object: None,
+            current_thread_id: None,
+        }
+    }
+
+    fn new(
         name: String,
         class_loader: Arc<Mutex<BootstrapClassLoader>>,
         classes: Arc<Mutex<HashMap<ClassIdentifier, Class>>>,
