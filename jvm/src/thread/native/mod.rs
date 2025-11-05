@@ -1,5 +1,4 @@
-use crate::thread::FrameValue;
-use common::ReferenceValue;
+use common::{FrameValue, ReferenceValue};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use anyhow::{Context, Result, bail};

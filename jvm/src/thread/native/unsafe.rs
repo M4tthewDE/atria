@@ -1,6 +1,5 @@
-use crate::thread::FieldValue;
-use crate::thread::FrameValue;
 use anyhow::{Context, Result, bail};
+use common::{FieldValue, FrameValue};
 
 use crate::{heap::HeapItem, thread::JvmThread};
 

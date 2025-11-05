@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use code::Code;
-use common::ReferenceValue;
-use common::{ClassIdentifier, HeapId};
+use common::{ClassIdentifier, FrameValue, HeapId};
 use instruction::Instruction;
 use parser::class::descriptor::MethodDescriptor;
 use tracing::trace;
@@ -270,69 +269,5 @@ impl Frame {
 
     fn object_ref(&self) -> &Option<HeapId> {
         &self.object_ref
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum FrameValue {
-    Reserved,
-    Reference(ReferenceValue),
-    Int(i32),
-    Long(i64),
-    Float(f32),
-    Double(f64),
-}
-
-impl FrameValue {
-    pub fn is_reference(&self) -> bool {
-        matches!(self, Self::Reference(_))
-    }
-
-    pub fn is_null(&self) -> bool {
-        matches!(self, FrameValue::Reference(ReferenceValue::Null))
-    }
-
-    pub fn reference(&self) -> Result<&ReferenceValue> {
-        if let Self::Reference(reference) = self {
-            Ok(reference)
-        } else {
-            bail!("frame value is not a reference")
-        }
-    }
-
-    pub fn int(&self) -> Result<i32> {
-        if let Self::Int(int) = self {
-            Ok(*int)
-        } else {
-            bail!("frame value is not a int, is {self:?}")
-        }
-    }
-
-    pub fn long(&self) -> Result<i64> {
-        if let Self::Long(long) = self {
-            Ok(*long)
-        } else {
-            bail!("frame value is not a long")
-        }
-    }
-
-    pub fn float(&self) -> Result<f32> {
-        if let Self::Float(float) = self {
-            Ok(*float)
-        } else {
-            bail!("frame value is not a float")
-        }
-    }
-
-    pub fn double(&self) -> Result<f64> {
-        if let Self::Double(double) = self {
-            Ok(*double)
-        } else {
-            bail!("frame value is not a double")
-        }
-    }
-
-    pub fn is_category1(&self) -> bool {
-        self.double().is_err() && self.long().is_err()
     }
 }

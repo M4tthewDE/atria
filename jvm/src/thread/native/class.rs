@@ -1,7 +1,5 @@
-use crate::thread::FrameValue;
 use anyhow::{Context, Result, bail};
-use common::ClassIdentifier;
-use common::ReferenceValue;
+use common::{ClassIdentifier, FrameValue, ReferenceValue};
 
 use crate::thread::JvmThread;
 

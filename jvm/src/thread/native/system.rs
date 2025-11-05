@@ -1,4 +1,4 @@
-use crate::thread::FrameValue;
+use common::FrameValue;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::{hash::DefaultHasher, time::Instant};

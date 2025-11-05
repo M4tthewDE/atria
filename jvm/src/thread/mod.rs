@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
-use common::{ClassIdentifier, FieldValue, HeapId, ReferenceValue, ThreadId};
+use common::{ClassIdentifier, FieldValue, FrameValue, HeapId, ReferenceValue, ThreadId};
 use monitor::Monitors;
 use parser::class::{
     ClassFile,
@@ -13,7 +13,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use stack::{FrameValue, Stack, code::Code, instruction::Instruction};
+use stack::{Stack, code::Code, instruction::Instruction};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
@@ -2164,31 +2164,6 @@ impl JvmThread {
             }
         } else {
             Ok(())
-        }
-    }
-}
-
-impl From<FrameValue> for FieldValue {
-    fn from(value: FrameValue) -> Self {
-        match value {
-            FrameValue::Reference(reference_value) => Self::Reference(reference_value),
-            FrameValue::Int(val) => Self::Integer(val),
-            FrameValue::Long(val) => Self::Long(val),
-            FrameValue::Float(val) => Self::Float(val),
-            FrameValue::Double(val) => Self::Double(val),
-            FrameValue::Reserved => panic!("impossible"),
-        }
-    }
-}
-
-impl From<FieldValue> for FrameValue {
-    fn from(value: FieldValue) -> Self {
-        match value {
-            FieldValue::Reference(reference_value) => Self::Reference(reference_value),
-            FieldValue::Integer(val) => Self::Int(val),
-            FieldValue::Long(val) => Self::Long(val),
-            FieldValue::Float(val) => Self::Float(val),
-            FieldValue::Double(val) => Self::Double(val),
         }
     }
 }
