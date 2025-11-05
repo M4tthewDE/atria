@@ -1,7 +1,8 @@
+use crate::thread::FieldValue;
 use crate::thread::FrameValue;
 use anyhow::{Context, Result, bail};
 
-use crate::{class::FieldValue, heap::HeapItem, thread::JvmThread};
+use crate::{heap::HeapItem, thread::JvmThread};
 
 pub fn run(
     jvm: &mut JvmThread,

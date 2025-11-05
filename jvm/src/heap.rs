@@ -1,3 +1,4 @@
+use crate::thread::class::FieldValue;
 use anyhow::{Result, bail};
 use common::ClassIdentifier;
 use common::HeapId;
@@ -6,8 +7,6 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use tracing::debug;
-
-use crate::class::FieldValue;
 
 #[derive(Debug, Clone)]
 pub struct InstanceField {

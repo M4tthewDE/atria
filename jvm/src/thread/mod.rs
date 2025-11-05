@@ -18,11 +18,10 @@ use stack::{FrameValue, Stack, code::Code, instruction::Instruction};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
-use crate::{
-    class::{Class, FieldValue},
-    loader::BootstrapClassLoader,
-};
+use crate::loader::BootstrapClassLoader;
+use class::{Class, FieldValue};
 
+pub mod class;
 mod monitor;
 mod native;
 mod stack;

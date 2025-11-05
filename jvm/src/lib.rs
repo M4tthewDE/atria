@@ -12,11 +12,10 @@ use crate::{
     loader::{BootstrapClassLoader, ReadClass},
 };
 
-pub mod class;
-pub mod heap;
-pub mod jar;
-pub mod jdk;
-pub mod loader;
+mod heap;
+mod jar;
+mod jdk;
+mod loader;
 pub mod thread;
 
 pub fn run_jar(file: File) -> Result<()> {
