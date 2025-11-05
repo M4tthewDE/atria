@@ -12,7 +12,6 @@ use crate::{
     loader::{BootstrapClassLoader, ReadClass},
 };
 
-mod heap;
 mod jar;
 mod jdk;
 mod loader;

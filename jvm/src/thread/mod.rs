@@ -16,13 +16,12 @@ use parser::class::{
 use stack::{Stack, code::Code, instruction::Instruction};
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::{
-    heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue},
-    loader::BootstrapClassLoader,
-};
+use crate::loader::BootstrapClassLoader;
 use class::Class;
+use heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
 
 mod class;
+mod heap;
 mod monitor;
 mod native;
 mod stack;
