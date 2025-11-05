@@ -1,27 +1,28 @@
-use common::ReferenceValue;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
-use common::{ClassIdentifier, HeapId, ThreadId};
+use common::{ClassIdentifier, FieldValue, HeapId, ReferenceValue, ThreadId};
 use monitor::Monitors;
-use parser::class::ClassFile;
-use parser::class::descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor};
 use parser::class::{
+    ClassFile,
     constant_pool::{CpIndex, CpInfo},
+    descriptor::{FieldDescriptor, FieldType, MethodDescriptor, ReturnDescriptor},
     field::Field,
     method::Method,
 };
 use stack::{FrameValue, Stack, code::Code, instruction::Instruction};
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue};
-use crate::loader::BootstrapClassLoader;
-use class::{Class, FieldValue};
+use crate::{
+    heap::{Heap, HeapItem, InstanceField, PrimitiveArrayType, PrimitiveArrayValue},
+    loader::BootstrapClassLoader,
+};
+use class::Class;
 
-pub mod class;
+mod class;
 mod monitor;
 mod native;
 mod stack;

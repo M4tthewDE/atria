@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result, bail};
-use common::{ClassIdentifier, HeapId, ReferenceValue};
+use anyhow::{Context, Result};
+use common::{ClassIdentifier, FieldValue};
 use parser::class::{
     ClassFile,
     access_flags::AccessFlag,
     constant_pool::{CpIndex, CpInfo},
-    descriptor::{BaseType, FieldDescriptor, FieldType, MethodDescriptor},
+    descriptor::{FieldDescriptor, MethodDescriptor},
     field::Field,
     method::Method,
 };
@@ -183,63 +183,5 @@ impl Class {
         }
 
         Ok(false)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum FieldValue {
-    Reference(ReferenceValue),
-    Integer(i32),
-    Long(i64),
-    Float(f32),
-    Double(f64),
-}
-
-impl FieldValue {
-    pub fn heap_id(&self) -> Result<&HeapId> {
-        match self {
-            FieldValue::Reference(reference_value) => reference_value.heap_id(),
-            _ => bail!("no heap id found"),
-        }
-    }
-
-    pub fn long(&self) -> Result<i64> {
-        match self {
-            Self::Long(val) => Ok(*val),
-            _ => bail!("no long found"),
-        }
-    }
-
-    pub fn int(&self) -> Result<i32> {
-        match self {
-            Self::Integer(val) => Ok(*val),
-            _ => bail!("no int found"),
-        }
-    }
-
-    pub fn reference(&self) -> Result<ReferenceValue> {
-        match self {
-            Self::Reference(val) => Ok(val.clone()),
-            _ => bail!("no reference found"),
-        }
-    }
-}
-
-impl From<FieldDescriptor> for FieldValue {
-    fn from(value: FieldDescriptor) -> Self {
-        match value.field_type {
-            FieldType::BaseType(base_type) => match base_type {
-                BaseType::Byte => Self::Integer(0),
-                BaseType::Char => Self::Integer(0),
-                BaseType::Double => Self::Double(0.0),
-                BaseType::Float => Self::Float(0.0),
-                BaseType::Int => Self::Integer(0),
-                BaseType::Long => Self::Long(0),
-                BaseType::Short => Self::Integer(0),
-                BaseType::Boolean => Self::Integer(0),
-            },
-            FieldType::ObjectType { .. } => Self::Reference(ReferenceValue::Null),
-            FieldType::ComponentType(..) => Self::Reference(ReferenceValue::Null),
-        }
     }
 }

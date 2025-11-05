@@ -1,8 +1,5 @@
-use crate::thread::class::FieldValue;
 use anyhow::{Result, bail};
-use common::ClassIdentifier;
-use common::HeapId;
-use common::ReferenceValue;
+use common::{ClassIdentifier, FieldValue, HeapId, ReferenceValue};
 use std::collections::HashMap;
 
 use anyhow::Context;

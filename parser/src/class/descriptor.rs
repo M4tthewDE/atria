@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use common::{FieldValue, ReferenceValue};
 
 #[derive(Debug)]
 pub struct FieldDescriptor {
@@ -16,6 +17,25 @@ impl FieldDescriptor {
 
     pub fn raw(&self) -> &str {
         &self.raw
+    }
+}
+
+impl From<FieldDescriptor> for FieldValue {
+    fn from(value: FieldDescriptor) -> FieldValue {
+        match value.field_type {
+            FieldType::BaseType(base_type) => match base_type {
+                BaseType::Byte => FieldValue::Integer(0),
+                BaseType::Char => FieldValue::Integer(0),
+                BaseType::Double => FieldValue::Double(0.0),
+                BaseType::Float => FieldValue::Float(0.0),
+                BaseType::Int => FieldValue::Integer(0),
+                BaseType::Long => FieldValue::Long(0),
+                BaseType::Short => FieldValue::Integer(0),
+                BaseType::Boolean => FieldValue::Integer(0),
+            },
+            FieldType::ObjectType { .. } => FieldValue::Reference(ReferenceValue::Null),
+            FieldType::ComponentType(..) => FieldValue::Reference(ReferenceValue::Null),
+        }
     }
 }
 

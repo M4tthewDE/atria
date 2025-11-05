@@ -162,6 +162,44 @@ impl ReferenceValue {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum FieldValue {
+    Reference(ReferenceValue),
+    Integer(i32),
+    Long(i64),
+    Float(f32),
+    Double(f64),
+}
+
+impl FieldValue {
+    pub fn heap_id(&self) -> Result<&HeapId> {
+        match self {
+            FieldValue::Reference(reference_value) => reference_value.heap_id(),
+            _ => bail!("no heap id found"),
+        }
+    }
+
+    pub fn long(&self) -> Result<i64> {
+        match self {
+            Self::Long(val) => Ok(*val),
+            _ => bail!("no long found"),
+        }
+    }
+
+    pub fn int(&self) -> Result<i32> {
+        match self {
+            Self::Integer(val) => Ok(*val),
+            _ => bail!("no int found"),
+        }
+    }
+
+    pub fn reference(&self) -> Result<ReferenceValue> {
+        match self {
+            Self::Reference(val) => Ok(val.clone()),
+            _ => bail!("no reference found"),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
