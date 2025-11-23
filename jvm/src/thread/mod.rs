@@ -133,6 +133,25 @@ impl JvmThread {
         let thread_object_heap_id =
             self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
+
+        let system_identifier = &ClassIdentifier::new("java.lang".to_owned(), "System".to_owned());
+        self.initialize(system_identifier)?;
+
+        let (_, method) = self.resolve_method(system_identifier, "initPhase1", "()V")?;
+        let class = self.class(system_identifier)?;
+        let descriptor = class.method_descriptor(&method)?;
+
+        let code = method.code().context("method {method_name} has no code")?;
+        self.stack.push(
+            "initPhase1".to_string(),
+            descriptor,
+            vec![],
+            Code::new(code.clone())?,
+            system_identifier.clone(),
+            None,
+        );
+        self.execute()?;
+
         let class = self.initialize(main_class)?;
         let (_, method) = self.resolve_method(main_class, "main", "([Ljava/lang/String;)V")?;
         let descriptor = class.method_descriptor(&method)?;
@@ -418,24 +437,6 @@ impl JvmThread {
         if class.has_super_class() {
             let super_class_identifier = class.super_class()?;
             self.initialize(&super_class_identifier)?;
-        }
-
-        if identifier == &ClassIdentifier::new("java.lang".to_owned(), "System".to_owned()) {
-            let (_, method) = self.resolve_method(identifier, "initPhase1", "()V")?;
-            let class = self.class(identifier)?;
-            let descriptor = class.method_descriptor(&method)?;
-
-            let operands = self.stack.pop_operands(descriptor.parameters.len())?;
-            let code = method.code().context("method {method_name} has no code")?;
-            self.stack.push(
-                "initPhase1".to_string(),
-                descriptor,
-                operands,
-                Code::new(code.clone())?,
-                identifier.clone(),
-                None,
-            );
-            self.execute()?;
         }
 
         self.execute_clinit(&class)?;
