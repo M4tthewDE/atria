@@ -36,16 +36,22 @@ pub fn run_jar(file: File) -> Result<()> {
 mod tests {
     use std::fs::File;
 
-    use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+    use tracing_subscriber::{
+        EnvFilter,
+        fmt::{self},
+        layer::SubscriberExt,
+        util::SubscriberInitExt,
+    };
 
     use super::*;
 
     #[test]
-    fn system() {
+    fn spring_boot_demo() {
         tracing_subscriber::registry()
             .with(fmt::layer())
             .with(EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .ok();
 
         let file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
         let res = run_jar(file);
@@ -67,5 +73,17 @@ org.springframework.boot.loader.launch.Launcher.<clinit>::42
 )",
             format!("{res:?}")
         );
+    }
+
+    #[test]
+    fn hello_world() {
+        tracing_subscriber::registry()
+            .with(fmt::layer())
+            .with(EnvFilter::from_default_env())
+            .try_init()
+            .ok();
+
+        let file = File::open("../samples/hello_world.jar").unwrap();
+        run_jar(file).unwrap();
     }
 }

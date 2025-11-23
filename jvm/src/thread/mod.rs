@@ -133,8 +133,19 @@ impl JvmThread {
         let thread_object_heap_id =
             self.new_thread_object(self.name.to_string(), "system".to_string())?;
         self.current_thread_object = Some(thread_object_heap_id);
-        self.initialize(main_class)?;
-        bail!("TODO: run_main")
+        let class = self.initialize(main_class)?;
+        let (_, method) = self.resolve_method(main_class, "main", "([Ljava/lang/String;)V")?;
+        let descriptor = class.method_descriptor(&method)?;
+        let code = method.code().context("method {method_name} has no code")?;
+        self.stack.push(
+            "main".to_string(),
+            descriptor,
+            vec![],
+            Code::new(code.clone())?,
+            main_class.clone(),
+            None,
+        );
+        self.execute()
     }
 
     #[instrument(name = "", skip_all, fields(t = self.name))]
@@ -409,7 +420,6 @@ impl JvmThread {
             self.initialize(&super_class_identifier)?;
         }
 
-        self.execute_clinit(&class)?;
         if identifier == &ClassIdentifier::new("java.lang".to_owned(), "System".to_owned()) {
             let (_, method) = self.resolve_method(identifier, "initPhase1", "()V")?;
             let class = self.class(identifier)?;
@@ -427,6 +437,9 @@ impl JvmThread {
             );
             self.execute()?;
         }
+
+        self.execute_clinit(&class)?;
+
         let mut classes = self
             .classes
             .lock()

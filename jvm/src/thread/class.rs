@@ -10,7 +10,7 @@ use parser::class::{
     field::Field,
     method::Method,
 };
-use tracing::trace;
+use tracing::{debug, trace};
 
 #[derive(Clone)]
 pub struct Class {
@@ -130,10 +130,14 @@ impl Class {
     }
 
     pub fn get_static_field_value(&self, name: &str) -> Result<FieldValue> {
-        self.static_fields
+        let field = self
+            .static_fields
             .get(name)
             .context(format!("field {name} not found in {:?}", self.identifier))
-            .cloned()
+            .cloned()?;
+
+        debug!("get static field '{name}': {field:?}");
+        Ok(field)
     }
 
     pub fn fields(&self) -> &Vec<Field> {
