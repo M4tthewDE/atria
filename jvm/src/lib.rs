@@ -57,19 +57,13 @@ mod tests {
         let res = run_jar(file);
         assert_eq!(
             "Err(thread 'main' has crashed: no value at offset at
-jdk.internal.misc.Unsafe.getReferenceAcquire::2148
-java.util.concurrent.ConcurrentHashMap.tabAt::760
-java.util.concurrent.ConcurrentHashMap.putVal::1018
-java.util.concurrent.ConcurrentHashMap.put::1006
-java.util.Properties.put::1301
-java.lang.System.createProperties::2087
-java.lang.System.initPhase1::2120
-sun.security.action.GetPropertyAction.privilegedGetProperties::152
-java.lang.invoke.MethodHandleStatics.<clinit>::66
-java.lang.invoke.MethodHandle.<clinit>::1777
-java.lang.invoke.MethodType.<clinit>::688
-org.springframework.boot.loader.launch.JarModeRunner.<clinit>::33
-org.springframework.boot.loader.launch.Launcher.<clinit>::42
+jdk.internal.misc.Unsafe.getReferenceAcquire(Unsafe:2148)
+java.util.concurrent.ConcurrentHashMap.tabAt(ConcurrentHashMap:760)
+java.util.concurrent.ConcurrentHashMap.putVal(ConcurrentHashMap:1018)
+java.util.concurrent.ConcurrentHashMap.put(ConcurrentHashMap:1006)
+java.util.Properties.put(Properties:1301)
+java.lang.System.createProperties(System:2087)
+java.lang.System.initPhase1(System:2120)
 )",
             format!("{res:?}")
         );
