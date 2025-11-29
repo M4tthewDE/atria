@@ -137,6 +137,43 @@ impl JvmThread {
         let system_identifier = &ClassIdentifier::new("java.lang".to_owned(), "System".to_owned());
         self.initialize(system_identifier)?;
 
+        let properties_identifier =
+            &ClassIdentifier::new("java.util".to_owned(), "Properties".to_owned());
+        self.initialize(properties_identifier)?;
+
+        let class = self.class(properties_identifier)?;
+        let fields = self.default_instance_fields(&class, 0)?;
+        let props = self.allocate(properties_identifier.clone(), fields)?;
+
+        let (_, method) = self.resolve_method(properties_identifier, "<init>", "()V")?;
+        let descriptor = class.method_descriptor(&method)?;
+        let code = method.code().context("method {method_name} has no code")?;
+        self.stack.push(
+            "<init>".to_string(),
+            descriptor,
+            vec![FrameValue::Reference(ReferenceValue::HeapItem(
+                props.clone(),
+            ))],
+            Code::new(code.clone())?,
+            properties_identifier.clone(),
+            None,
+        );
+        self.execute()?;
+
+        {
+            let mut classes = self
+                .classes
+                .lock()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+            classes
+                .get_mut(system_identifier)
+                .context(format!("class {system_identifier:?} is not initialized"))?
+                .set_static_field(
+                    "props",
+                    FieldValue::Reference(ReferenceValue::HeapItem(props)),
+                )?;
+        }
+
         let (_, method) = self.resolve_method(system_identifier, "initPhase1", "()V")?;
         let class = self.class(system_identifier)?;
         let descriptor = class.method_descriptor(&method)?;
