@@ -13,7 +13,7 @@ pub fn run(
         "registerNatives" => Ok(None),
         "storeFence" => Ok(None),
         "arrayBaseOffset0" => Ok(Some(FrameValue::Int(0))),
-        "arrayIndexScale0" => Ok(Some(FrameValue::Int(0))),
+        "arrayIndexScale0" => Ok(Some(FrameValue::Int(4))),
         "objectFieldOffset1" => {
             let class = operands.get(1).context("no class operand found")?;
             let name = operands.get(2).context("no String operand found")?;
@@ -105,7 +105,7 @@ pub fn run(
             let object = jvm.heap_get(heap_id)?;
 
             if object.is_array() {
-                jvm.store_into_reference_array(heap_id, offset as usize, x.clone())?;
+                jvm.store_into_reference_array(heap_id, offset as usize / 16, x.clone())?;
                 return Ok(Some(FrameValue::Int(1)));
             }
 
@@ -131,7 +131,9 @@ pub fn run(
             let object = jvm.heap_get(heap_id)?;
 
             if let HeapItem::ReferenceArray { values, .. } = object {
-                let value = values.get(offset as usize).context("no value at offset")?;
+                let value = values
+                    .get(offset as usize / 16)
+                    .with_context(|| format!("no value at offset {:?}", offset))?;
                 return Ok(Some(FrameValue::Reference(value.clone())));
             }
 
