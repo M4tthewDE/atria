@@ -2,18 +2,15 @@ use std::fs::File;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Result, anyhow, bail};
-use common::ClassIdentifier;
 use zip::ZipArchive;
 
 use crate::thread::JvmThread;
 use crate::{
     jar::Jar,
-    jdk::Jdk,
     loader::{BootstrapClassLoader, ReadClass},
 };
 
 mod jar;
-mod jdk;
 mod loader;
 pub mod thread;
 
@@ -21,7 +18,7 @@ pub fn run_jar(file: File) -> Result<()> {
     let archive = ZipArchive::new(file)?;
     let mut jar = Jar::new(archive);
     let main_class = jar.manifest()?.main_class;
-    let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk::new()?)];
+    let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar)];
     let class_loader = Arc::new(Mutex::new(BootstrapClassLoader::new(sources)));
     let main_thread = JvmThread::default("main".to_string(), class_loader);
 
