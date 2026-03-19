@@ -76,15 +76,7 @@ mod tests {
         let file = File::open("../spring-boot-demo/target/demo-0.0.1-SNAPSHOT.jar").unwrap();
         let res = run_jar(file);
         assert_eq!(
-            "Err(thread 'main' has crashed: no value at offset at
-jdk.internal.misc.Unsafe.getReferenceAcquire(Unsafe:2148)
-java.util.concurrent.ConcurrentHashMap.tabAt(ConcurrentHashMap:760)
-java.util.concurrent.ConcurrentHashMap.putVal(ConcurrentHashMap:1018)
-java.util.concurrent.ConcurrentHashMap.put(ConcurrentHashMap:1006)
-java.util.Properties.put(Properties:1301)
-java.lang.System.createProperties(System:2087)
-java.lang.System.initPhase1(System:2120)
-)",
+            "Err(thread 'main' has crashed: method not found, maybe check interfaces?\n\nCaused by:\n    no utf8 constant pool item found at index CpIndex(0) at\norg.springframework.boot.loader.launch.JarModeRunner.<clinit>(JarModeRunner:33)\norg.springframework.boot.loader.launch.Launcher.<clinit>(Launcher:42)\n)",
             format!("{res:?}")
         );
     }
