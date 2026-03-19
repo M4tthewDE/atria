@@ -255,7 +255,7 @@ impl Heap {
             HeapItem::Object(object) => object
                 .fields
                 .get(name)
-                .context("no field with name '{name}' found")
+                .context(format!("no field with name '{name}' found"))
                 .map(|f| f.value.clone()),
             _ => bail!("item at {id:?} is no object, but {item:?}"),
         }

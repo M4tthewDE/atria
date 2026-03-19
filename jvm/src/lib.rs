@@ -18,7 +18,7 @@ pub fn run_jar(file: File) -> Result<()> {
     let archive = ZipArchive::new(file)?;
     let mut jar = Jar::new(archive);
     let main_class = jar.manifest()?.main_class;
-    let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar)];
+    let sources: Vec<Box<dyn ReadClass>> = vec![Box::new(jar), Box::new(Jdk {})];
     let class_loader = Arc::new(Mutex::new(BootstrapClassLoader::new(sources)));
     let main_thread = JvmThread::default("main".to_string(), class_loader);
 
@@ -26,7 +26,30 @@ pub fn run_jar(file: File) -> Result<()> {
     main_handle
         .join()
         .map_err(|err| anyhow!("thread error: {err:?}"))??;
-    bail!("TODO: After main thread exits")
+    Ok(())
+}
+
+struct Jdk;
+
+impl ReadClass for Jdk {
+    fn read_class(&mut self, identifier: &common::ClassIdentifier) -> Result<Vec<u8>> {
+        Ok(match identifier.package.as_str() {
+            "java.lang" => match identifier.name.as_str() {
+                "Class" => jdk::JAVA_LANG_CLASS_BYTES.to_vec(),
+                "Object" => jdk::JAVA_LANG_OBJECT_BYTES.to_vec(),
+                "String" => jdk::JAVA_LANG_STRING_BYTES.to_vec(),
+                "ThreadGroup" => jdk::JAVA_LANG_THREAD_GROUP_BYTES.to_vec(),
+                "Thread" => jdk::JAVA_LANG_THREAD_BYTES.to_vec(),
+                "System" => jdk::JAVA_LANG_SYSTEM_BYTES.to_vec(),
+                _ => bail!("class not found"),
+            },
+            "java.io" => match identifier.name.as_str() {
+                "PrintStream" => jdk::JAVA_IO_PRINT_STREAM_BYTES.to_vec(),
+                _ => bail!("class not found"),
+            },
+            _ => bail!("class not found"),
+        })
+    }
 }
 
 #[cfg(test)]

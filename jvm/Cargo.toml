@@ -7,9 +7,9 @@ edition = "2024"
 anyhow = "1.0.100"
 parser = { version = "0.1.0", path = "../parser" }
 common = { version = "0.1.0", path = "../common" }
+jdk = { version = "0.1.0", path = "../jdk" }
 tracing = "0.1.41"
 zip = "5.1.1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-
