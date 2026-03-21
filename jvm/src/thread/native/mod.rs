@@ -1,4 +1,4 @@
-use common::FrameValue;
+use common::{FrameValue, ReferenceValue};
 
 use anyhow::{Context, Result, bail};
 use common::ClassIdentifier;
@@ -34,6 +34,20 @@ pub fn run(
                 let value = String::from_utf8(bytes)?;
                 println!("{value}");
                 Ok(None)
+            }
+            _ => bail!("native method {name} on {class_identifier:?} not implemented",),
+        },
+        "java.lang.Class" => match name {
+            "getName" => {
+                let class = operands
+                    .first()
+                    .context("no first operand")?
+                    .reference()?
+                    .class_identifier()?;
+                let class_name = jvm.new_string(format!("{class:?}"))?;
+                Ok(Some(FrameValue::Reference(ReferenceValue::HeapItem(
+                    class_name,
+                ))))
             }
             _ => bail!("native method {name} on {class_identifier:?} not implemented",),
         },

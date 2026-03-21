@@ -2036,9 +2036,10 @@ impl JvmThread {
 
             Ok((class.identifier().clone(), m.clone()))
         } else {
-            let super_class = class
-                .super_class()
-                .context("method not found, maybe check interfaces?")?;
+            let super_class = class.super_class().context(format!(
+                "method {name} not found on {:?}, maybe check interfaces?",
+                class.identifier()
+            ))?;
             self.resolve_method(&super_class.clone(), name, descriptor)
         }
     }
